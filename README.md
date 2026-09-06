@@ -83,7 +83,7 @@ Bailanysta — учебный проект по ТЗ nFactorial (грант на
 Требуется Node.js ≥ 20.
 
 ```bash
-git clone https://github.com/<ваш-логин>/bailanysta.git
+git clone https://github.com/yerassylduis/bailanysta.git
 cd bailanysta
 npm install
 cp .env.example .env.local     # при желании впишите ANTHROPIC_API_KEY
