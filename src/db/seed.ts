@@ -3,6 +3,7 @@ import type { drizzle } from "drizzle-orm/libsql";
 import * as schema from "./schema";
 import { newId } from "@/lib/ids";
 import { extractTags, hueFromHandle } from "@/lib/text";
+import { BOT_PROFILE } from "@/lib/bot";
 
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 
@@ -93,4 +94,12 @@ export async function seedIfEmpty(db: Db) {
   for (const [pi, by, text] of demoComments) {
     await db.insert(schema.comments).values({ id: newId(), postId: postIds[pi], authorId: ids.get(by)!, text, createdAt: new Date(now - pi * 3000_000).toISOString() });
   }
+}
+
+/** Бот-помощник должен существовать всегда — и в свежей базе, и в уже заполненной. */
+export async function ensureBot(db: Db) {
+  await db.insert(schema.users).values({
+    id: "bot_komekshi", handle: BOT_PROFILE.handle, name: BOT_PROFILE.name, bio: BOT_PROFILE.bio,
+    hue: hueFromHandle(BOT_PROFILE.handle), createdAt: new Date(0).toISOString(),
+  }).onConflictDoNothing();
 }

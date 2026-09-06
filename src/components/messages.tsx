@@ -10,6 +10,8 @@ import { RichText } from "./rich-text";
 import { MediaGrid } from "./media";
 import { useToast } from "./toast";
 import { cn, timeAgo } from "@/lib/format";
+import { BOT_HANDLE, QUICK_QUESTIONS } from "@/lib/bot";
+import { Bot } from "lucide-react";
 
 /**
  * «Хат» — личные сообщения. Двухпанельная раскладка на десктопе, одна панель на телефоне.
@@ -74,9 +76,11 @@ function ChatThread({ handle }: { handle: string }) {
 
   useEffect(() => { bottom.current?.scrollIntoView({ block: "end" }); }, [count]);
 
-  const submit = async () => {
-    const t = text.trim();
-    const mediaId = upload.mediaIds[0];
+  const isBot = q.data?.peer.handle === BOT_HANDLE;
+
+  const submit = async (preset?: string) => {
+    const t = (preset ?? text).trim();
+    const mediaId = preset ? undefined : upload.mediaIds[0];
     if ((!t && !mediaId) || send.isPending || upload.uploading) return;
     try {
       await send.mutateAsync({ text: t || undefined, mediaId });
@@ -91,7 +95,7 @@ function ChatThread({ handle }: { handle: string }) {
         {q.data ? (
           <Link href={`/u/${q.data.peer.handle}`} className="flex min-w-0 items-center gap-2.5">
             <Avatar user={q.data.peer} size={36} />
-            <span className="min-w-0 leading-tight"><span className="block truncate text-sm font-semibold">{q.data.peer.name}</span><span className="block text-xs text-muted">@{q.data.peer.handle}</span></span>
+            <span className="min-w-0 leading-tight"><span className="flex items-center gap-1.5 truncate text-sm font-semibold">{q.data.peer.name}{isBot && <span className="chip py-0 text-[10px] text-accent"><Bot size={11} /> бот</span>}</span><span className="block text-xs text-muted">{isBot ? "отвечает мгновенно" : `@${q.data.peer.handle}`}</span></span>
           </Link>
         ) : <Skeleton className="h-9 w-40" />}
       </header>
@@ -100,6 +104,7 @@ function ChatThread({ handle }: { handle: string }) {
         {q.isPending && <div className="space-y-3">{[0, 1, 2].map((i) => <Skeleton key={i} className={cn("h-10 w-2/3 rounded-2xl!", i % 2 === 1 && "ml-auto")} />)}</div>}
         {q.isError && <p className="text-center text-sm text-rose">{q.error.message}</p>}
         {q.data && !q.data.items.length && <p className="py-10 text-center text-sm text-muted">Начните разговор — напишите первым. Можно прикрепить фото или видео.</p>}
+        {send.isPending && isBot && <p className="text-xs text-muted">Көмекші печатает…</p>}
         {q.data?.items.map((m, i) => {
           const prev = q.data.items[i - 1];
           const showTime = !prev || new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() > 10 * 60_000;
@@ -119,6 +124,13 @@ function ChatThread({ handle }: { handle: string }) {
       </div>
 
       <div className="border-t border-line p-2.5 pb-safe">
+        {isBot && (
+          <div className="no-scrollbar -mx-1 mb-2 flex gap-1.5 overflow-x-auto px-1">
+            {QUICK_QUESTIONS.map((qq) => (
+              <button key={qq} onClick={() => submit(qq)} disabled={send.isPending} className="chip shrink-0 hover:border-accent">{qq}</button>
+            ))}
+          </div>
+        )}
         {upload.items.length > 0 && (
           <div className="mb-2 flex gap-2">
             {upload.items.map((a) => (
@@ -143,7 +155,7 @@ function ChatThread({ handle }: { handle: string }) {
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
             onPaste={(e) => { const f = Array.from(e.clipboardData.files ?? []); if (f.length) { e.preventDefault(); upload.add(f); } }}
             className="input max-h-32 min-h-10 flex-1 resize-none py-2.5" />
-          <button onClick={submit} disabled={(!text.trim() && !upload.mediaIds.length) || send.isPending || upload.uploading} className="btn btn-primary btn-icon shrink-0" aria-label="Отправить"><Send size={18} /></button>
+          <button onClick={() => submit()} disabled={(!text.trim() && !upload.mediaIds.length) || send.isPending || upload.uploading} className="btn btn-primary btn-icon shrink-0" aria-label="Отправить"><Send size={18} /></button>
         </div>
       </div>
     </>

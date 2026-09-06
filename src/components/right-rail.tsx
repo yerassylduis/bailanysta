@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Search, Hash, Sparkles } from "lucide-react";
+import { Search, Hash, Sparkles, Bot } from "lucide-react";
 import { useMe, useSuggested, useTrending } from "@/hooks/use-data";
 import { Avatar, Skeleton } from "./ui";
 import { plural } from "@/lib/format";
@@ -69,6 +69,12 @@ export function RightRail() {
         {!me?.user && <Link href="/login" className="btn btn-outline mt-3 w-full text-xs">Войти и попробовать</Link>}
       </section>
 
+      {me?.user && (
+        <Link href="/messages/bailanysta" className="card flex items-center gap-3 p-3 transition hover:border-accent">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"><Bot size={18} /></span>
+          <span className="min-w-0 leading-tight"><span className="block text-sm font-semibold">Есть вопрос?</span><span className="block text-xs text-muted">Спросите помощника Көмекші</span></span>
+        </Link>
+      )}
       <p className="px-2 text-[11px] leading-relaxed text-muted">Bailanysta · «байланыс» — связь. Сделано для nFactorial, 2026.</p>
     </div>
   );

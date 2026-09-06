@@ -31,7 +31,8 @@ export function LoginForm() {
       const res = await api.login(h, n);
       await qc.invalidateQueries();
       toast(res.created ? `Добро пожаловать, ${res.user.name}! Профиль создан.` : `С возвращением, ${res.user.name}!`, "success");
-      router.push("/");
+      // Новичка встречает помощник в чате, знакомого пользователя — лента.
+      router.push(res.created ? "/messages/bailanysta" : "/");
     } catch (e) { toast(e instanceof Error ? e.message : "Не удалось войти", "error"); }
     finally { setBusy(false); }
   };

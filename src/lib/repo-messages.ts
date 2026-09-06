@@ -5,6 +5,7 @@ import { newId, nowIso } from "./ids";
 import { findUserByHandle, toMediaDto, toUserDto } from "./repo";
 import type { ConversationDto, MessageDto } from "./types";
 import type { User } from "@/db/schema";
+import { BOT_HANDLE, WELCOME, botReply } from "./bot";
 
 /** Личные сообщения («Хат» — письмо). Диалог создаётся при первом сообщении. */
 
@@ -120,5 +121,28 @@ export async function sendMessage(sender: User, handle: string, text: string, me
   const id = newId();
   await db.insert(messages).values({ id, conversationId: conv.id, senderId: sender.id, text, mediaId, createdAt: now });
   await markRead(conv.id, sender.id);
+
+  // Бот отвечает сразу, в той же транзакции запроса: клиент увидит ответ при следующем опросе.
+  if (peer.handle === BOT_HANDLE) {
+    const reply = text ? await botReply(text) : "Красиво! 📷 Я, правда, пока умею отвечать только на вопросы словами — спросите что-нибудь о Bailanysta.";
+    const at = new Date(Date.now() + 1).toISOString();
+    await db.insert(messages).values({ id: newId(), conversationId: conv.id, senderId: peer.id, text: reply, mediaId: null, createdAt: at });
+    await db.update(conversations).set({ lastMessageAt: at }).where(eq(conversations.id, conv.id));
+  }
   return { id, text, media: md ? toMediaDto(md) : null, mine: true, createdAt: now };
+}
+
+/** Приветственный диалог от бота: создаётся один раз, если у пользователя ещё нет переписки с ним. */
+export async function ensureWelcome(user: User) {
+  if (user.handle === BOT_HANDLE) return;
+  const bot = await findUserByHandle(BOT_HANDLE);
+  if (!bot) return;
+  if (await findConversation(user.id, bot.id)) return;
+  const db = await getDb();
+  const now = nowIso();
+  const [ua, ub] = pair(user.id, bot.id);
+  const conv = { id: newId(), userA: ua, userB: ub, lastMessageAt: now, createdAt: now };
+  await db.insert(conversations).values(conv);
+  await db.insert(messages).values({ id: newId(), conversationId: conv.id, senderId: bot.id, text: WELCOME(user.name.split(/\s+/)[0] || user.name), mediaId: null, createdAt: now });
+  await markRead(conv.id, bot.id);
 }

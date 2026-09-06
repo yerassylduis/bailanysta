@@ -5,6 +5,7 @@ import { newId, nowIso } from "./ids";
 import { extractMentions, extractTags, hueFromHandle } from "./text";
 import type { CommentDto, GraphDto, MediaDto, NotificationDto, Page, PostDto, TrendingTag, UserDto, UserProfileDto } from "./types";
 import type { Media, User } from "@/db/schema";
+import { BOT_HANDLE } from "./bot";
 
 /**
  * Репозиторий — единственное место, где живёт SQL.
@@ -100,9 +101,10 @@ export async function suggestedUsers(viewerId: string | null, limit = 4): Promis
   const rows = await db
     .select({ u: users, followers: sql<number>`(select count(*) from follows f where f.followee_id = ${users.id})` })
     .from(users)
-    .where(viewerId
-      ? and(sql`${users.id} != ${viewerId}`, sql`${users.id} not in (select followee_id from follows where follower_id = ${viewerId})`)
-      : undefined)
+    .where(and(
+      sql`${users.handle} != ${BOT_HANDLE}`,
+      viewerId ? and(sql`${users.id} != ${viewerId}`, sql`${users.id} not in (select followee_id from follows where follower_id = ${viewerId})`) : undefined,
+    ))
     .orderBy(desc(sql`(select count(*) from follows f where f.followee_id = ${users.id})`))
     .limit(limit);
   return rows.map((r) => ({ ...toUserDto(r.u), followers: Number(r.followers) }));
@@ -449,7 +451,7 @@ export async function trendingTags(limit = 8): Promise<TrendingTag[]> {
 export async function socialGraph(): Promise<GraphDto> {
   const db = await getDb();
   const [us, fs, pc, fc] = await Promise.all([
-    db.select().from(users),
+    db.select().from(users).where(sql`${users.handle} != ${BOT_HANDLE}`),
     db.select().from(follows),
     db.select({ id: posts.authorId, n: count() }).from(posts).groupBy(posts.authorId),
     db.select({ id: follows.followeeId, n: count() }).from(follows).groupBy(follows.followeeId),

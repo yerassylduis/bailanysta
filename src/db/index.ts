@@ -2,7 +2,7 @@ import { createClient, type Client } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import * as schema from "./schema";
 import { DDL, SOFT_MIGRATIONS } from "./ddl";
-import { seedIfEmpty } from "./seed";
+import { ensureBot, seedIfEmpty } from "./seed";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -17,7 +17,7 @@ import path from "node:path";
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 
 /** Поднимайте при изменении DDL/SOFT_MIGRATIONS: в dev это заставит переинициализировать кэш после hot-reload. */
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 type Cached = { client: Client; db: Db; ready: Promise<void>; version: number };
 const g = globalThis as unknown as { __bailanysta?: Cached };
@@ -55,6 +55,7 @@ function createDb() {
       }
     }
     await seedIfEmpty(db);
+    await ensureBot(db);
   })().catch((e) => {
     // Не кэшируем неудачную инициализацию: следующий запрос попробует снова.
     g.__bailanysta = undefined;
