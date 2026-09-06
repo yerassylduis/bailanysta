@@ -31,6 +31,8 @@ const g = globalThis as unknown as { __bailanysta?: Cached };
  */
 function resolveUrl() {
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
+  // Интеграция Turso из маркетплейса Vercel задаёт TURSO_DATABASE_URL (+ TURSO_AUTH_TOKEN).
+  if (process.env.TURSO_DATABASE_URL) return process.env.TURSO_DATABASE_URL;
   if (process.env.VERCEL) {
     console.warn("[db] DATABASE_URL не задан: используется эфемерная SQLite в /tmp. Для постоянного хранения подключите Turso.");
     return "file:/tmp/bailanysta.db";

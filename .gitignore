@@ -45,3 +45,8 @@ next-env.d.ts
 
 # local sqlite
 /data/*.db*
+
+# файлы, которые подкладывают интеграции Vercel (документация провайдеров)
+/.agents/
+/.claude/skills/
+skills-lock.json
