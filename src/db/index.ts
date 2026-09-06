@@ -1,7 +1,7 @@
 import { createClient, type Client } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import * as schema from "./schema";
-import { DDL } from "./ddl";
+import { DDL, SOFT_MIGRATIONS } from "./ddl";
 import { seedIfEmpty } from "./seed";
 import fs from "node:fs";
 import path from "node:path";
@@ -16,7 +16,11 @@ import path from "node:path";
 
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 
-const g = globalThis as unknown as { __bailanysta?: { client: Client; db: Db; ready: Promise<void> } };
+/** Поднимайте при изменении DDL/SOFT_MIGRATIONS: в dev это заставит переинициализировать кэш после hot-reload. */
+const SCHEMA_VERSION = 2;
+
+type Cached = { client: Client; db: Db; ready: Promise<void>; version: number };
+const g = globalThis as unknown as { __bailanysta?: Cached };
 
 /**
  * Выбор URL базы:
@@ -42,16 +46,25 @@ function createDb() {
   }
   const client = createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
   const db = drizzle(client, { schema });
-  const ready = (async () => {
+  const ready: Promise<void> = (async () => {
     if (url.startsWith("file:")) await client.execute("PRAGMA foreign_keys = ON");
     for (const stmt of DDL) await client.execute(stmt);
+    for (const stmt of SOFT_MIGRATIONS) {
+      try { await client.execute(stmt); } catch (e) {
+        if (!/duplicate column/i.test(String(e))) throw e;
+      }
+    }
     await seedIfEmpty(db);
-  })();
-  return { client, db, ready };
+  })().catch((e) => {
+    // Не кэшируем неудачную инициализацию: следующий запрос попробует снова.
+    g.__bailanysta = undefined;
+    throw e;
+  });
+  return { client, db, ready, version: SCHEMA_VERSION };
 }
 
 export async function getDb(): Promise<Db> {
-  if (!g.__bailanysta) g.__bailanysta = createDb();
+  if (!g.__bailanysta || g.__bailanysta.version !== SCHEMA_VERSION) g.__bailanysta = createDb();
   await g.__bailanysta.ready;
   return g.__bailanysta.db;
 }

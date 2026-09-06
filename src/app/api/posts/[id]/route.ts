@@ -13,8 +13,9 @@ export const GET = handler<Ctx>(async (_req, { params }) => {
 });
 
 const Patch = z.object({
-  text: z.string().trim().min(1).max(POST_MAX).optional(),
+  text: z.string().trim().max(POST_MAX).optional(),
   mood: z.enum(MOOD_IDS).nullable().optional(),
+  mediaIds: z.array(z.string()).max(4).optional(),
 });
 
 export const PATCH = handler<Ctx>(async (req, { params }) => {

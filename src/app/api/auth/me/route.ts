@@ -2,12 +2,14 @@ import { z } from "zod";
 import { handler, ok, parseBody } from "@/lib/http";
 import { currentUser, requireUser } from "@/lib/auth";
 import { toUserDto, unreadCount, updateProfile } from "@/lib/repo";
+import { unreadMessagesCount } from "@/lib/repo-messages";
 
 /** Текущий пользователь + число непрочитанных уведомлений (для шапки). */
 export const GET = handler(async () => {
   const user = await currentUser();
-  if (!user) return ok({ user: null, unread: 0 });
-  return ok({ user: toUserDto(user), unread: await unreadCount(user.id) });
+  if (!user) return ok({ user: null, unread: 0, unreadMessages: 0 });
+  const [unread, unreadMessages] = await Promise.all([unreadCount(user.id), unreadMessagesCount(user.id)]);
+  return ok({ user: toUserDto(user), unread, unreadMessages });
 });
 
 const Patch = z.object({ name: z.string().trim().min(1).max(60).optional(), bio: z.string().trim().max(200).optional() });

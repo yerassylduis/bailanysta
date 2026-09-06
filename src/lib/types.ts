@@ -15,6 +15,15 @@ export type UserProfileDto = UserDto & {
   isViewer: boolean;
 };
 
+export type MediaDto = {
+  id: string;
+  kind: "image" | "video";
+  mime: string;
+  url: string;
+  width: number | null;
+  height: number | null;
+};
+
 export type PostDto = {
   id: string;
   text: string;
@@ -23,9 +32,31 @@ export type PostDto = {
   editedAt: string | null;
   author: UserDto;
   tags: string[];
+  media: MediaDto[];
+  /** Исходный пост для репоста/цитаты (один уровень вложенности). null, если исходник удалён. */
+  repostOf: PostDto | null;
+  isRepost: boolean;
   likeCount: number;
   commentCount: number;
+  repostCount: number;
   likedByViewer: boolean;
+  repostedByViewer: boolean;
+  bookmarkedByViewer: boolean;
+};
+
+export type ConversationDto = {
+  id: string;
+  peer: UserDto;
+  lastMessage: { text: string; hasMedia: boolean; mine: boolean; createdAt: string } | null;
+  unread: number;
+};
+
+export type MessageDto = {
+  id: string;
+  text: string;
+  media: MediaDto | null;
+  mine: boolean;
+  createdAt: string;
 };
 
 export type CommentDto = {
@@ -37,7 +68,7 @@ export type CommentDto = {
 
 export type NotificationDto = {
   id: string;
-  type: "like" | "comment" | "follow" | "mention";
+  type: "like" | "comment" | "follow" | "mention" | "repost" | "quote";
   read: boolean;
   createdAt: string;
   actor: UserDto;
@@ -53,6 +84,6 @@ export type GraphDto = {
   links: Array<{ source: string; target: string }>;
 };
 
-export type MuseMode = "draft" | "polish" | "hashtags" | "translate" | "reply";
+export type MuseMode = "draft" | "polish" | "hashtags" | "translate" | "reply" | "caption";
 export type MuseRequest = { mode: MuseMode; text: string; lang?: "kk" | "ru" | "en" };
 export type MuseResponse = { variants: string[]; source: "claude" | "offline"; note?: string };

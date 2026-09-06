@@ -26,6 +26,7 @@ const TASK: Record<MuseRequest["mode"], (t: string, lang?: string) => string> = 
   hashtags: (t) => `Предложи 3 набора из 2–4 уместных хэштегов для поста (каждый вариант — одна строка вида "#a #b #c"):\n"""${t}"""`,
   translate: (t, lang) => `Переведи пост на ${lang === "kk" ? "казахский" : lang === "en" ? "английский" : "русский"} язык. Дай 3 варианта: дословный, разговорный, поэтичный:\n"""${t}"""`,
   reply: (t) => `Придумай 3 варианта короткого, доброжелательного и содержательного комментария к посту:\n"""${t}"""`,
+  caption: (t) => `Пользователь публикует фото/видео и описал его так: """${t}""". Напиши 3 варианта живой подписи к медиа (до 200 символов), можно с 1–2 хэштегами.`,
 };
 
 export async function muse(req: MuseRequest): Promise<MuseResponse> {
@@ -56,7 +57,7 @@ const CLOSERS = ["А как у вас?", "Поделитесь опытом.", "
 
 function offline(req: MuseRequest, note: string): MuseResponse {
   const t = req.text.trim();
-  let variants: string[];
+  let variants: string[] = [];
   switch (req.mode) {
     case "draft":
       variants = STARTERS.map((s, i) => `${s} ${t.replace(/[.!?]+$/, "")}. ${CLOSERS[i]}`);
@@ -80,6 +81,9 @@ function offline(req: MuseRequest, note: string): MuseResponse {
       break;
     case "reply":
       variants = ["Очень откликается, спасибо!", "Интересная мысль — расскажите подробнее?", "Согласен(на) на сто процентов."];
+      break;
+    case "caption":
+      variants = [`${t} ✨`, `Момент дня: ${t.toLowerCase()} #bailanysta`, `${t}. Без фильтров.`];
       break;
   }
   return { variants: [...new Set(variants)].filter(Boolean), source: "offline", note };

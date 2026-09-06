@@ -3,7 +3,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
-import type { Page, PostDto, UserProfileDto } from "@/lib/types";
+import type { MessageDto, Page, PostDto, UserProfileDto } from "@/lib/types";
 
 /**
  * Все хуки данных в одном месте. Ключи запросов — тоже здесь, чтобы
@@ -19,6 +19,8 @@ export const keys = {
   trending: ["trending"] as const,
   suggested: ["suggested"] as const,
   graph: ["graph"] as const,
+  conversations: ["conversations"] as const,
+  messages: (h: string) => ["messages", h] as const,
 };
 
 export function useMe() {
@@ -34,7 +36,7 @@ export function useLogout() {
   });
 }
 
-export type FeedFilter = { scope?: "all" | "following"; author?: string; q?: string; tag?: string; mood?: string };
+export type FeedFilter = { scope?: "all" | "following" | "bookmarks" | "hot"; author?: string; q?: string; tag?: string; mood?: string };
 
 export function useFeed(filter: FeedFilter, enabled = true) {
   const clean = Object.fromEntries(Object.entries(filter).filter(([, v]) => v)) as Record<string, string | undefined>;
@@ -86,7 +88,7 @@ export function useCreatePost() {
 export function useUpdatePost() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: string; text?: string; mood?: string | null }) => api.updatePost(id, body),
+    mutationFn: ({ id, ...body }: { id: string; text?: string; mood?: string | null; mediaIds?: string[] }) => api.updatePost(id, body),
     onSuccess: (post) => { patchPostEverywhere(qc, post.id, () => post); qc.invalidateQueries({ queryKey: keys.trending }); },
   });
 }
@@ -110,6 +112,63 @@ export function useAddComment(postId: string) {
     onSuccess: (c) => {
       qc.setQueryData<{ items: typeof c[] }>(keys.comments(postId), (d) => ({ items: [...(d?.items ?? []), c] }));
       patchPostEverywhere(qc, postId, (p) => ({ ...p, commentCount: p.commentCount + 1 }));
+    },
+  });
+}
+
+export function useRepost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, text }: { id: string; text?: string }) => api.repost(id, text),
+    onSuccess: (_created, { id, text }) => {
+      patchPostEverywhere(qc, id, (p) => ({ ...p, repostCount: p.repostCount + 1, repostedByViewer: text ? p.repostedByViewer : true }));
+      qc.invalidateQueries({ queryKey: ["posts"] });
+    },
+  });
+}
+
+export function useUndoRepost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.undoRepost(id),
+    onSuccess: (res, id) => { patchPostEverywhere(qc, id, (p) => ({ ...p, ...res })); qc.invalidateQueries({ queryKey: ["posts"] }); },
+  });
+}
+
+export function useBookmark() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, on }: { id: string; on: boolean }) => api.bookmark(id, on),
+    onMutate: ({ id, on }) => patchPostEverywhere(qc, id, (p) => ({ ...p, bookmarkedByViewer: on })),
+    onError: (_e, { id, on }) => patchPostEverywhere(qc, id, (p) => ({ ...p, bookmarkedByViewer: !on })),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["posts", { scope: "bookmarks" }] }),
+  });
+}
+
+/* ------------------------------ сообщения ------------------------------- */
+
+export function useConversations(enabled: boolean) {
+  return useQuery({ queryKey: keys.conversations, queryFn: api.conversations, enabled, refetchInterval: 8_000 });
+}
+
+/** Тред с собеседником: опрос раз в 3 с, новые сообщения дописываются в кэш. */
+export function useMessages(handle: string, enabled: boolean) {
+  return useQuery({
+    queryKey: keys.messages(handle),
+    queryFn: () => api.messages(handle),
+    enabled,
+    refetchInterval: 3_000,
+    structuralSharing: true,
+  });
+}
+
+export function useSendMessage(handle: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { text?: string; mediaId?: string }) => api.sendMessage(handle, body),
+    onSuccess: (m: MessageDto) => {
+      qc.setQueryData<Awaited<ReturnType<typeof api.messages>>>(keys.messages(handle), (d) => (d ? { ...d, items: [...d.items, m] } : d));
+      qc.invalidateQueries({ queryKey: keys.conversations });
     },
   });
 }

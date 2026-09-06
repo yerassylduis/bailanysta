@@ -45,7 +45,7 @@ export function LoginForm() {
             <span className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted">Ник</span>
             <div className="relative">
               <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">@</span>
-              <input value={handle} onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))} placeholder="aisha" className="input pl-8" autoFocus autoComplete="username" maxLength={32} />
+              <input value={handle} onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))} placeholder="aisha" className="input pl-9" autoFocus autoComplete="username" maxLength={32} />
             </div>
             <span className="mt-1 block text-xs text-muted">2–32 символа: латиница, цифры, «_». Если ника нет — создадим профиль.</span>
           </label>

@@ -23,10 +23,82 @@ export const posts = sqliteTable(
     text: text("text").notNull(),
     /** Настроение поста: жалын | тыныш | идея | ой | null */
     mood: text("mood"),
+    /** Репост/цитата: ссылка на исходный пост. Пустой text + repostOfId = чистый репост. */
+    repostOfId: text("repost_of_id"),
     createdAt: text("created_at").notNull(),
     editedAt: text("edited_at"),
   },
-  (t) => [index("posts_author_idx").on(t.authorId), index("posts_created_idx").on(t.createdAt)],
+  (t) => [index("posts_author_idx").on(t.authorId), index("posts_created_idx").on(t.createdAt), index("posts_repost_idx").on(t.repostOfId)],
+);
+
+/** Медиафайлы (фото/видео). Сам файл лежит в хранилище (диск или Vercel Blob), здесь — метаданные и URL. */
+export const media = sqliteTable("media", {
+  id: text("id").primaryKey(),
+  ownerId: text("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(), // image | video
+  mime: text("mime").notNull(),
+  size: integer("size").notNull(),
+  width: integer("width"),
+  height: integer("height"),
+  url: text("url").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const postMedia = sqliteTable(
+  "post_media",
+  {
+    postId: text("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
+    mediaId: text("media_id").notNull().references(() => media.id, { onDelete: "cascade" }),
+    position: integer("position").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.postId, t.mediaId] })],
+);
+
+export const bookmarks = sqliteTable(
+  "bookmarks",
+  {
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    postId: text("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.postId] })],
+);
+
+/** Личные сообщения: диалог двух людей (userA < userB лексикографически, чтобы пара была уникальной). */
+export const conversations = sqliteTable(
+  "conversations",
+  {
+    id: text("id").primaryKey(),
+    userA: text("user_a").notNull().references(() => users.id, { onDelete: "cascade" }),
+    userB: text("user_b").notNull().references(() => users.id, { onDelete: "cascade" }),
+    lastMessageAt: text("last_message_at").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("conv_pair_idx").on(t.userA, t.userB)],
+);
+
+export const messages = sqliteTable(
+  "messages",
+  {
+    id: text("id").primaryKey(),
+    conversationId: text("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+    senderId: text("sender_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    text: text("text").notNull().default(""),
+    mediaId: text("media_id").references(() => media.id, { onDelete: "set null" }),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("msg_conv_idx").on(t.conversationId, t.createdAt)],
+);
+
+/** Отметка «прочитано до»: одна строка на участника диалога. */
+export const conversationReads = sqliteTable(
+  "conversation_reads",
+  {
+    conversationId: text("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    lastReadAt: text("last_read_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.conversationId, t.userId] })],
 );
 
 export const postTags = sqliteTable(
@@ -90,3 +162,5 @@ export type User = typeof users.$inferSelect;
 export type Post = typeof posts.$inferSelect;
 export type Comment = typeof comments.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
+export type Media = typeof media.$inferSelect;
+export type Message = typeof messages.$inferSelect;

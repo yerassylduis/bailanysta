@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkles, Wand2, Hash, Languages, PenLine, X } from "lucide-react";
+import { Sparkles, Wand2, Hash, Languages, PenLine, X, Image as ImageIcon } from "lucide-react";
 import { useMuse } from "@/hooks/use-data";
 import type { MuseMode } from "@/lib/types";
 import { cn } from "@/lib/format";
@@ -12,11 +12,12 @@ const MODES: Array<{ id: MuseMode; label: string; icon: React.ReactNode; needsTe
   { id: "polish", label: "Отполировать", icon: <Wand2 size={14} />, needsText: "Вставьте текст, который хотите улучшить." },
   { id: "hashtags", label: "Хэштеги", icon: <Hash size={14} />, needsText: "Нужен текст поста, чтобы подобрать теги." },
   { id: "translate", label: "Перевести", icon: <Languages size={14} />, needsText: "Нужен текст для перевода." },
+  { id: "caption", label: "Подпись к медиа", icon: <ImageIcon size={14} />, needsText: "Опишите фото или видео парой слов — Муза придумает подпись." },
 ];
 
 /** Панель Музы внутри редактора: режимы, варианты, вставка одним кликом. */
-export function MusePanel({ text, onPick, onClose }: { text: string; onPick: (v: string) => void; onClose: () => void }) {
-  const [mode, setMode] = useState<MuseMode>("draft");
+export function MusePanel({ text, onPick, onClose, hasMedia }: { text: string; onPick: (v: string) => void; onClose: () => void; hasMedia?: boolean }) {
+  const [mode, setMode] = useState<MuseMode>(hasMedia ? "caption" : "draft");
   const [lang, setLang] = useState<"kk" | "ru" | "en">("kk");
   const muse = useMuse();
   const ready = text.trim().length > 0;

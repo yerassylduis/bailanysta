@@ -11,7 +11,8 @@ import { MOOD_IDS, POST_MAX } from "@/lib/text";
 export const GET = handler(async (req) => {
   const viewer = await currentUser();
   const p = new URL(req.url).searchParams;
-  const scope = p.get("scope") === "following" ? "following" : "all";
+  const sc = p.get("scope");
+  const scope = sc === "following" || sc === "bookmarks" || sc === "hot" ? sc : "all";
   const page = await listPosts({
     scope, authorHandle: p.get("author") ?? undefined, q: p.get("q") ?? undefined,
     tag: p.get("tag") ?? undefined, mood: p.get("mood") ?? undefined,
@@ -21,12 +22,14 @@ export const GET = handler(async (req) => {
 });
 
 const Body = z.object({
-  text: z.string().trim().min(1, "Пост не может быть пустым").max(POST_MAX),
+  text: z.string().trim().max(POST_MAX).default(""),
   mood: z.enum(MOOD_IDS).nullable().optional(),
+  /** До 4 фото или 1 видео — проверяется на сервере. */
+  mediaIds: z.array(z.string()).max(4).default([]),
 });
 
 export const POST = handler(async (req) => {
   const user = await requireUser();
-  const { text, mood } = await parseBody(req, Body);
-  return ok(await createPost(user, text, mood ?? null), { status: 201 });
+  const { text, mood, mediaIds } = await parseBody(req, Body);
+  return ok(await createPost(user, { text, mood: mood ?? null, mediaIds }), { status: 201 });
 });

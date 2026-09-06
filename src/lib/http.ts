@@ -35,7 +35,7 @@ export function handler<Ctx>(fn: (req: Request, ctx: Ctx) => Promise<Response>) 
     } catch (e) {
       if (e instanceof HttpError) return fail(e.status, e.message);
       if (e instanceof ZodError) return fail(400, "Некорректные данные", e.issues);
-      console.error("[api]", e);
+      console.error("[api]", e, e instanceof Error && e.cause ? `\n  cause: ${String(e.cause)}` : "");
       return fail(500, "Внутренняя ошибка сервера");
     }
   };

@@ -3,19 +3,41 @@ import { getDb, schema } from "@/db";
 import { HttpError } from "./auth";
 import { newId, nowIso } from "./ids";
 import { extractMentions, extractTags, hueFromHandle } from "./text";
-import type { CommentDto, GraphDto, NotificationDto, Page, PostDto, TrendingTag, UserDto, UserProfileDto } from "./types";
-import type { User } from "@/db/schema";
+import type { CommentDto, GraphDto, MediaDto, NotificationDto, Page, PostDto, TrendingTag, UserDto, UserProfileDto } from "./types";
+import type { Media, User } from "@/db/schema";
 
 /**
  * Репозиторий — единственное место, где живёт SQL.
  * Route handlers только валидируют вход и вызывают функции отсюда.
  */
 
-const { users, posts, postTags, likes, comments, follows, notifications } = schema;
+const { users, posts, postTags, likes, comments, follows, notifications, media, postMedia, bookmarks } = schema;
 
 export const toUserDto = (u: User): UserDto => ({
   id: u.id, handle: u.handle, name: u.name, bio: u.bio, hue: u.hue, createdAt: u.createdAt,
 });
+
+export const toMediaDto = (m: Media): MediaDto => ({
+  id: m.id, kind: m.kind as MediaDto["kind"], mime: m.mime, url: m.url, width: m.width, height: m.height,
+});
+
+/* -------------------------------- media --------------------------------- */
+
+export async function createMedia(m: Omit<Media, "createdAt">): Promise<MediaDto> {
+  const db = await getDb();
+  const row: Media = { ...m, createdAt: nowIso() };
+  await db.insert(media).values(row);
+  return toMediaDto(row);
+}
+
+/** Проверяет, что все медиа существуют и принадлежат автору. */
+async function ownedMedia(ownerId: string, ids: string[]) {
+  if (!ids.length) return [];
+  const db = await getDb();
+  const rows = await db.select().from(media).where(and(inArray(media.id, ids), eq(media.ownerId, ownerId)));
+  if (rows.length !== ids.length) throw new HttpError(400, "Некоторые файлы не найдены или принадлежат другому пользователю");
+  return rows;
+}
 
 /* ----------------------------- users / auth ----------------------------- */
 
@@ -89,7 +111,7 @@ export async function suggestedUsers(viewerId: string | null, limit = 4): Promis
 /* -------------------------------- posts --------------------------------- */
 
 export type PostFilter = {
-  scope?: "all" | "following";
+  scope?: "all" | "following" | "bookmarks" | "hot";
   authorHandle?: string;
   q?: string;
   tag?: string;
@@ -116,6 +138,22 @@ export async function listPosts(f: PostFilter, viewerId: string | null): Promise
       eq(posts.authorId, viewerId),
       inArray(posts.authorId, db.select({ id: follows.followeeId }).from(follows).where(eq(follows.followerId, viewerId))),
     ));
+  }
+  if (f.scope === "bookmarks") {
+    if (!viewerId) return { items: [], nextCursor: null };
+    conds.push(inArray(posts.id, db.select({ id: bookmarks.postId }).from(bookmarks).where(eq(bookmarks.userId, viewerId))));
+  }
+  if (f.scope === "hot") {
+    // «Горячее»: вовлечённость с затуханием по времени (как у Hacker News). Без курсора — топ-30.
+    const since = new Date(Date.now() - 7 * 86400_000).toISOString();
+    conds.push(gt(posts.createdAt, since), sql`${posts.repostOfId} IS NULL OR length(${posts.text}) > 0`);
+    const score = sql`(
+      (select count(*) from likes l where l.post_id = ${posts.id}) * 2 +
+      (select count(*) from comments c where c.post_id = ${posts.id}) * 3 +
+      (select count(*) from posts r where r.repost_of_id = ${posts.id}) * 4 + 1.0
+    ) / power((julianday('now') - julianday(${posts.createdAt})) * 24 + 2, 1.4)`;
+    const rows = await db.select().from(posts).where(and(...conds)).orderBy(desc(score)).limit(30);
+    return { items: await hydratePosts(rows, viewerId), nextCursor: null };
   }
   if (f.authorHandle) {
     conds.push(inArray(posts.authorId, db.select({ id: users.id }).from(users).where(eq(users.handle, f.authorHandle))));
@@ -146,32 +184,48 @@ export async function listPosts(f: PostFilter, viewerId: string | null): Promise
   return { items, nextCursor: hasMore ? encodeCursor(page[page.length - 1]) : null };
 }
 
-/** Догружает автора, теги и счётчики для набора постов (батчем, без N+1). */
-async function hydratePosts(rows: (typeof posts.$inferSelect)[], viewerId: string | null): Promise<PostDto[]> {
+/** Догружает автора, теги, медиа, исходник репоста и счётчики для набора постов (батчем, без N+1). */
+async function hydratePosts(rows: (typeof posts.$inferSelect)[], viewerId: string | null, depth = 0): Promise<PostDto[]> {
   if (!rows.length) return [];
   const db = await getDb();
   const ids = rows.map((r) => r.id);
   const authorIds = [...new Set(rows.map((r) => r.authorId))];
+  const repostIds = [...new Set(rows.map((r) => r.repostOfId).filter((x): x is string => !!x))];
 
-  const [authors, tags, likeCounts, commentCounts, viewerLikes] = await Promise.all([
+  const [authors, tags, med, likeCounts, commentCounts, repostCounts, viewerLikes, viewerReposts, viewerBookmarks, originals] = await Promise.all([
     db.select().from(users).where(inArray(users.id, authorIds)),
     db.select().from(postTags).where(inArray(postTags.postId, ids)),
+    db.select({ pm: postMedia, m: media }).from(postMedia).innerJoin(media, eq(postMedia.mediaId, media.id)).where(inArray(postMedia.postId, ids)).orderBy(postMedia.position),
     db.select({ postId: likes.postId, n: count() }).from(likes).where(inArray(likes.postId, ids)).groupBy(likes.postId),
     db.select({ postId: comments.postId, n: count() }).from(comments).where(inArray(comments.postId, ids)).groupBy(comments.postId),
+    db.select({ postId: posts.repostOfId, n: count() }).from(posts).where(inArray(posts.repostOfId, ids)).groupBy(posts.repostOfId),
     viewerId ? db.select({ postId: likes.postId }).from(likes).where(and(eq(likes.userId, viewerId), inArray(likes.postId, ids))) : Promise.resolve([]),
+    viewerId ? db.select({ postId: posts.repostOfId }).from(posts).where(and(eq(posts.authorId, viewerId), inArray(posts.repostOfId, ids), eq(posts.text, ""))) : Promise.resolve([]),
+    viewerId ? db.select({ postId: bookmarks.postId }).from(bookmarks).where(and(eq(bookmarks.userId, viewerId), inArray(bookmarks.postId, ids))) : Promise.resolve([]),
+    repostIds.length && depth === 0 ? db.select().from(posts).where(inArray(posts.id, repostIds)) : Promise.resolve([]),
   ]);
 
   const authorMap = new Map(authors.map((a) => [a.id, toUserDto(a)]));
   const tagMap = new Map<string, string[]>();
   for (const t of tags) tagMap.set(t.postId, [...(tagMap.get(t.postId) ?? []), t.tag]);
+  const mediaMap = new Map<string, MediaDto[]>();
+  for (const { pm, m } of med) mediaMap.set(pm.postId, [...(mediaMap.get(pm.postId) ?? []), toMediaDto(m)]);
   const lc = new Map(likeCounts.map((x) => [x.postId, x.n]));
   const cc = new Map(commentCounts.map((x) => [x.postId, x.n]));
+  const rc = new Map(repostCounts.map((x) => [x.postId as string, x.n]));
   const liked = new Set(viewerLikes.map((x) => x.postId));
+  const reposted = new Set(viewerReposts.map((x) => x.postId));
+  const marked = new Set(viewerBookmarks.map((x) => x.postId));
+  const origDtos = await hydratePosts(originals, viewerId, depth + 1);
+  const origMap = new Map(origDtos.map((o) => [o.id, o]));
 
   return rows.map((r) => ({
     id: r.id, text: r.text, mood: r.mood, createdAt: r.createdAt, editedAt: r.editedAt,
-    author: authorMap.get(r.authorId)!, tags: tagMap.get(r.id) ?? [],
-    likeCount: lc.get(r.id) ?? 0, commentCount: cc.get(r.id) ?? 0, likedByViewer: liked.has(r.id),
+    author: authorMap.get(r.authorId)!, tags: tagMap.get(r.id) ?? [], media: mediaMap.get(r.id) ?? [],
+    repostOf: r.repostOfId ? origMap.get(r.repostOfId) ?? null : null,
+    isRepost: !!r.repostOfId && r.text === "",
+    likeCount: lc.get(r.id) ?? 0, commentCount: cc.get(r.id) ?? 0, repostCount: rc.get(r.id) ?? 0,
+    likedByViewer: liked.has(r.id), repostedByViewer: reposted.has(r.id), bookmarkedByViewer: marked.has(r.id),
   }));
 }
 
@@ -199,22 +253,59 @@ async function notifyMentions(actor: User, postId: string, text: string, skipUse
   for (const t of targets) if (t.id !== skipUserId) await pushNotification({ userId: t.id, actorId: actor.id, type: "mention", postId });
 }
 
-export async function createPost(author: User, text: string, mood: string | null): Promise<PostDto> {
+export type NewPost = { text: string; mood: string | null; mediaIds: string[]; repostOfId?: string | null };
+
+export async function createPost(author: User, input: NewPost): Promise<PostDto> {
   const db = await getDb();
+  const text = input.text.trim();
+  if (!text && !input.mediaIds.length && !input.repostOfId) throw new HttpError(400, "Пост не может быть пустым");
+  let original: typeof posts.$inferSelect | null = null;
+  if (input.repostOfId) {
+    const [o] = await db.select().from(posts).where(eq(posts.id, input.repostOfId)).limit(1);
+    if (!o) throw new HttpError(404, "Исходный пост не найден");
+    // Репостим исходник, а не репост репоста.
+    original = o.repostOfId && o.text === "" ? (await db.select().from(posts).where(eq(posts.id, o.repostOfId)).limit(1))[0] ?? o : o;
+    if (!text) {
+      const [dup] = await db.select({ id: posts.id }).from(posts).where(and(eq(posts.authorId, author.id), eq(posts.repostOfId, original.id), eq(posts.text, ""))).limit(1);
+      if (dup) throw new HttpError(409, "Вы уже репостнули этот пост");
+    }
+  }
+  const files = await ownedMedia(author.id, input.mediaIds);
   const id = newId();
-  await db.insert(posts).values({ id, authorId: author.id, text, mood, createdAt: nowIso() });
+  await db.insert(posts).values({ id, authorId: author.id, text, mood: input.mood, repostOfId: original?.id ?? null, createdAt: nowIso() });
+  if (files.length) await db.insert(postMedia).values(input.mediaIds.map((mediaId, position) => ({ postId: id, mediaId, position })));
   await syncTags(id, text);
   await notifyMentions(author, id, text);
+  if (original && original.authorId !== author.id) {
+    await pushNotification({ userId: original.authorId, actorId: author.id, type: text ? "quote" : "repost", postId: id });
+  }
   return getPost(id, author.id);
 }
 
-export async function updatePost(author: User, id: string, patch: { text?: string; mood?: string | null }): Promise<PostDto> {
+export async function undoRepost(author: User, originalId: string) {
+  const db = await getDb();
+  const mine = await db.select({ id: posts.id }).from(posts).where(and(eq(posts.authorId, author.id), eq(posts.repostOfId, originalId), eq(posts.text, "")));
+  for (const r of mine) await deletePost(author, r.id);
+  const [{ n }] = await db.select({ n: count() }).from(posts).where(eq(posts.repostOfId, originalId));
+  return { repostCount: n, repostedByViewer: false };
+}
+
+export async function updatePost(author: User, id: string, patch: { text?: string; mood?: string | null; mediaIds?: string[] }): Promise<PostDto> {
   const db = await getDb();
   const [row] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
   if (!row) throw new HttpError(404, "Пост не найден");
   if (row.authorId !== author.id) throw new HttpError(403, "Можно редактировать только свои посты");
-  await db.update(posts).set({ ...patch, editedAt: nowIso() }).where(eq(posts.id, id));
-  if (patch.text !== undefined) await syncTags(id, patch.text);
+  const { mediaIds, ...rest } = patch;
+  if (mediaIds) {
+    await ownedMedia(author.id, mediaIds);
+    await db.delete(postMedia).where(eq(postMedia.postId, id));
+    if (mediaIds.length) await db.insert(postMedia).values(mediaIds.map((mediaId, position) => ({ postId: id, mediaId, position })));
+  }
+  const nextText = rest.text !== undefined ? rest.text.trim() : row.text;
+  const nextMediaCount = mediaIds ? mediaIds.length : (await db.select({ n: count() }).from(postMedia).where(eq(postMedia.postId, id)))[0].n;
+  if (!nextText && !nextMediaCount && !row.repostOfId) throw new HttpError(400, "Пост не может быть пустым");
+  await db.update(posts).set({ ...rest, text: nextText, editedAt: nowIso() }).where(eq(posts.id, id));
+  await syncTags(id, nextText);
   return getPost(id, author.id);
 }
 
@@ -227,8 +318,25 @@ export async function deletePost(author: User, id: string) {
   await db.delete(notifications).where(eq(notifications.postId, id));
   await db.delete(comments).where(eq(comments.postId, id));
   await db.delete(likes).where(eq(likes.postId, id));
+  await db.delete(bookmarks).where(eq(bookmarks.postId, id));
   await db.delete(postTags).where(eq(postTags.postId, id));
+  await db.delete(postMedia).where(eq(postMedia.postId, id));
+  // Чистые репосты удалённого поста исчезают; цитаты остаются (исходник покажется как «удалён»).
+  const pure = await db.select({ id: posts.id }).from(posts).where(and(eq(posts.repostOfId, id), eq(posts.text, "")));
+  for (const r of pure) { await db.delete(notifications).where(eq(notifications.postId, r.id)); await db.delete(posts).where(eq(posts.id, r.id)); }
+  await db.update(posts).set({ repostOfId: null }).where(eq(posts.repostOfId, id));
   await db.delete(posts).where(eq(posts.id, id));
+}
+
+/* ------------------------------ bookmarks ------------------------------- */
+
+export async function setBookmark(viewer: User, postId: string, on: boolean) {
+  const db = await getDb();
+  const [row] = await db.select({ id: posts.id }).from(posts).where(eq(posts.id, postId)).limit(1);
+  if (!row) throw new HttpError(404, "Пост не найден");
+  if (on) await db.insert(bookmarks).values({ userId: viewer.id, postId, createdAt: nowIso() }).onConflictDoNothing();
+  else await db.delete(bookmarks).where(and(eq(bookmarks.userId, viewer.id), eq(bookmarks.postId, postId)));
+  return { bookmarkedByViewer: on };
 }
 
 /* -------------------------------- likes --------------------------------- */

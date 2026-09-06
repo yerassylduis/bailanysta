@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarDays, Pencil, LogOut, Check, X } from "lucide-react";
+import { CalendarDays, Pencil, LogOut, Check, X, MessageCircle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLogout, useMe, useProfile, keys } from "@/hooks/use-data";
 import { api } from "@/lib/api-client";
@@ -48,13 +48,18 @@ export function Profile({ handle }: { handle: string }) {
         <div className="px-5 pb-5 sm:px-6">
           <div className="-mt-10 flex items-end justify-between gap-3">
             <Avatar user={p} size={84} className="ring-4 ring-elev" />
-            <div className="flex gap-2 pb-1">
+            <div className="flex flex-wrap justify-end gap-2 pb-1">
               {own ? (
                 <>
                   <button onClick={edit ? () => setEdit(false) : startEdit} className="btn btn-outline">{edit ? <><X size={16} /> Отмена</> : <><Pencil size={16} /> Редактировать</>}</button>
                   <button onClick={() => logout.mutate()} className="btn btn-ghost" title="Выйти"><LogOut size={16} /></button>
                 </>
-              ) : <FollowButton handle={p.handle} following={p.viewerFollows} />}
+              ) : (
+                <>
+                  {meData?.user && <Link href={`/messages/${p.handle}`} className="btn btn-outline btn-icon" aria-label="Написать сообщение" title="Написать"><MessageCircle size={18} /></Link>}
+                  <FollowButton handle={p.handle} following={p.viewerFollows} />
+                </>
+              )}
             </div>
           </div>
 

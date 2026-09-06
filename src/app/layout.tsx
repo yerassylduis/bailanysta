@@ -15,10 +15,10 @@ export const metadata: Metadata = {
   icons: { icon: "/icon.svg" },
 };
 
-export const viewport: Viewport = { themeColor: [{ color: "#f4eee2" }] };
+export const viewport: Viewport = { themeColor: "#f6f4ee", width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 /* Скрипт исполняется до первой отрисовки, чтобы тема не «мигала». */
-const themeScript = `(function(){try{var t=localStorage.getItem('bl_theme');if(!t){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.setAttribute('data-theme',t)}catch(e){}})();`;
+const themeScript = `(function(){try{var t=localStorage.getItem('bl_theme');document.documentElement.setAttribute('data-theme',t==='dark'?'dark':'light')}catch(e){}})();`;
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const cookieTheme = (await cookies()).get(THEME_COOKIE)?.value as Theme | undefined;

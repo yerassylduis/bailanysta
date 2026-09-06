@@ -17,6 +17,7 @@ export const DDL: string[] = [
     author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     text TEXT NOT NULL,
     mood TEXT,
+    repost_of_id TEXT,
     created_at TEXT NOT NULL,
     edited_at TEXT
   )`,
@@ -60,4 +61,60 @@ export const DDL: string[] = [
     created_at TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS notif_user_idx ON notifications(user_id, read)`,
+  `CREATE TABLE IF NOT EXISTS media (
+    id TEXT PRIMARY KEY,
+    owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    mime TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    width INTEGER,
+    height INTEGER,
+    url TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS post_media (
+    post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    media_id TEXT NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (post_id, media_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS bookmarks (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, post_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS conversations (
+    id TEXT PRIMARY KEY,
+    user_a TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_b TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    last_message_at TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS conv_pair_idx ON conversations(user_a, user_b)`,
+  `CREATE TABLE IF NOT EXISTS messages (
+    id TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    text TEXT NOT NULL DEFAULT '',
+    media_id TEXT REFERENCES media(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS msg_conv_idx ON messages(conversation_id, created_at)`,
+  `CREATE TABLE IF NOT EXISTS conversation_reads (
+    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    last_read_at TEXT NOT NULL,
+    PRIMARY KEY (conversation_id, user_id)
+  )`,
+];
+
+/**
+ * Мягкие миграции для уже существующих баз: добавляем колонки, если их нет.
+ * Ошибка «duplicate column» игнорируется вызывающей стороной.
+ */
+export const SOFT_MIGRATIONS: string[] = [
+  `ALTER TABLE posts ADD COLUMN repost_of_id TEXT`,
+  // индексы на добавленные колонки — только после ALTER
+  `CREATE INDEX IF NOT EXISTS posts_repost_idx ON posts(repost_of_id)`,
 ];
