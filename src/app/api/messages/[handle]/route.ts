@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { handler, ok, parseBody, type RouteCtx } from "@/lib/http";
 import { requireUser } from "@/lib/auth";
-import { listMessages, sendMessage } from "@/lib/repo-messages";
+import { ensureWelcome, listMessages, sendMessage } from "@/lib/repo-messages";
 import { COMMENT_MAX } from "@/lib/text";
 
 type Ctx = RouteCtx<{ handle: string }>;
@@ -11,6 +11,7 @@ export const GET = handler<Ctx>(async (req, { params }) => {
   const { handle } = await params;
   const user = await requireUser();
   const after = new URL(req.url).searchParams.get("after") ?? undefined;
+  await ensureWelcome(user);
   return ok(await listMessages(user, handle.toLowerCase(), after));
 });
 

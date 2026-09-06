@@ -29,8 +29,40 @@ const TASK: Record<MuseRequest["mode"], (t: string, lang?: string) => string> = 
   caption: (t) => `Пользователь публикует фото/видео и описал его так: """${t}""". Напиши 3 варианта живой подписи к медиа (до 200 символов), можно с 1–2 хэштегами.`,
 };
 
+/* ------------------------ перевод без ключа ИИ -------------------------- */
+
+/** Грубое определение языка: казахские буквы → kk, латиница → en, иначе ru. */
+function detectLang(t: string): "kk" | "ru" | "en" {
+  if (/[әіңғүұқөһӘІҢҒҮҰҚӨҺ]/.test(t)) return "kk";
+  const cyr = (t.match(/[а-яё]/gi) ?? []).length, lat = (t.match(/[a-z]/gi) ?? []).length;
+  return lat > cyr ? "en" : "ru";
+}
+
+/**
+ * Резервный переводчик — бесплатный MyMemory (без ключа, лимит ~5000 символов в день с одного IP).
+ * Вызывается только с сервера; при любой ошибке возвращает null, и Муза честно скажет об этом.
+ */
+async function freeTranslate(text: string, to: "kk" | "ru" | "en"): Promise<string | null> {
+  const from = detectLang(text);
+  if (from === to) return text;
+  try {
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text.slice(0, 500))}&langpair=${from}|${to}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const j = (await res.json()) as { responseStatus: number; responseData?: { translatedText?: string } };
+    const out = j.responseData?.translatedText?.trim();
+    return j.responseStatus === 200 && out && !/MYMEMORY WARNING/i.test(out) ? out : null;
+  } catch { return null; }
+}
+
 export async function muse(req: MuseRequest): Promise<MuseResponse> {
-  if (!process.env.ANTHROPIC_API_KEY) return offline(req, "Ключ ANTHROPIC_API_KEY не задан — Муза работает офлайн");
+  if (!process.env.ANTHROPIC_API_KEY) {
+    if (req.mode === "translate") {
+      const out = await freeTranslate(req.text, req.lang ?? "kk");
+      if (out) return { variants: [out], source: "offline", note: "перевод выполнен бесплатным сервисом MyMemory, без ИИ" };
+      return offline(req, "переводчик недоступен");
+    }
+    return offline(req, "Ключ ANTHROPIC_API_KEY не задан — Муза работает офлайн");
+  }
   try {
     const client = new Anthropic({ timeout: 25_000, maxRetries: 1 });
     const response = await client.messages.parse({
@@ -77,7 +109,7 @@ function offline(req: MuseRequest, note: string): MuseResponse {
       break;
     }
     case "translate":
-      variants = [`[${req.lang ?? "ru"}] ${t}`];
+      variants = [t];
       break;
     case "reply":
       variants = ["Очень откликается, спасибо!", "Интересная мысль — расскажите подробнее?", "Согласен(на) на сто процентов."];

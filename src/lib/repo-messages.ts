@@ -57,7 +57,7 @@ export async function listConversations(userId: string): Promise<ConversationDto
     unread.set(c.id, n);
   }
 
-  return convs.map((c) => {
+  const items = convs.map((c) => {
     const peer = peerMap.get(c.userA === userId ? c.userB : c.userA)!;
     const last = lastMap.get(c.id);
     return {
@@ -65,6 +65,8 @@ export async function listConversations(userId: string): Promise<ConversationDto
       lastMessage: last ? { text: last.text, hasMedia: !!last.mediaId, mine: last.senderId === userId, createdAt: last.createdAt } : null,
     };
   });
+  // Помощник — всегда первым, как закреплённый чат.
+  return items.sort((a, b) => Number(b.peer.handle === BOT_HANDLE) - Number(a.peer.handle === BOT_HANDLE));
 }
 
 export async function unreadMessagesCount(userId: string): Promise<number> {

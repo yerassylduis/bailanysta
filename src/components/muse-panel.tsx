@@ -62,7 +62,7 @@ export function MusePanel({ text, onPick, onClose, hasMedia }: { text: string; o
             </button>
           ))}
           <p className="text-[11px] text-muted">
-            {muse.data.source === "claude" ? "Сгенерировано Claude · вызов идёт с сервера" : `Офлайн-режим · ${muse.data.note}`}
+            {muse.data.source === "claude" ? "Сгенерировано Claude · вызов идёт с сервера" : `Офлайн-режим · ${muse.data.note}. Чтобы включить настоящий ИИ, добавьте ANTHROPIC_API_KEY в .env.local и перезапустите сервер.`}
           </p>
         </div>
       )}
