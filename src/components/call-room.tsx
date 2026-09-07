@@ -24,6 +24,21 @@ export function CallRoom({ id }: { id: string }) {
   // Заранее запрашиваем камеру/микрофон на экране входа — вход по кнопке становится мгновенным
   const { prepare, onRecording, joined } = room;
   useEffect(() => { if (me?.user && !joined) prepare().catch(() => {}); }, [me?.user, joined, prepare]);
+  const [wantMic, setWantMic] = useState(false);
+  const [wantCam, setWantCam] = useState(false);
+  const [busyDev, setBusyDev] = useState<"audio" | "video" | null>(null);
+  const toggleWant = async (kind: "audio" | "video") => {
+    const on = kind === "audio" ? !wantMic : !wantCam;
+    if (on) {
+      setBusyDev(kind);
+      const ok = await room.enableDevice(kind);
+      setBusyDev(null);
+      if (!ok) return;
+    } else {
+      room.local?.getTracks().filter((t) => t.kind === kind).forEach((t) => { t.stop(); room.local?.removeTrack(t); });
+    }
+    if (kind === "audio") setWantMic(on); else setWantCam(on);
+  };
   // Кто-то включил запись — всплывашка (звук и голос — в хуке)
   useEffect(() => { onRecording((by) => toast(`🔴 ${by}: идёт запись звонка`, "error")); }, [onRecording, toast]);
   const previewRef = useRef<HTMLVideoElement>(null);
@@ -88,14 +103,27 @@ export function CallRoom({ id }: { id: string }) {
       <div className="mx-auto max-w-lg pt-6">
         <Link href="/calls" className="btn btn-ghost -ml-2 mb-3 px-2 text-sm"><ArrowLeft size={16} /> Все созвоны</Link>
         <div className="card p-6 text-center">
-          {room.local && room.local.getVideoTracks().length > 0 ? (
+          {wantCam && room.local && room.local.getVideoTracks().length > 0 ? (
             <video ref={previewRef} autoPlay playsInline muted className="mx-auto mb-3 aspect-video w-full max-w-sm rounded-xl bg-black object-cover scale-x-[-1]" />
           ) : (
-            <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-accent-soft text-accent"><Video size={26} /></span>
+            <div className="mx-auto mb-3 flex aspect-video w-full max-w-sm flex-col items-center justify-center gap-2 rounded-xl bg-bg-2 text-muted">
+              <VideoOff size={28} />
+              <span className="text-xs">Камера выключена</span>
+            </div>
           )}
           <h1 className="font-display text-xl font-bold">{room.call?.title ?? "Созвон"}</h1>
           <p className="mt-1 font-mono text-sm text-muted">{id}</p>
-          <p className="mt-3 text-sm text-ink-2">{room.local ? (room.local.getVideoTracks().length ? "Камера и микрофон готовы — нажмите «Присоединиться»." : "Камера недоступна — подключимся только со звуком.") : "Браузер попросит доступ к камере и микрофону. Если камеры нет — подключимся только со звуком."}</p>
+          <p className="mt-3 text-sm text-ink-2">Выберите, с чем войти. По умолчанию микрофон и камера выключены — включить можно и во время звонка.</p>
+          <div className="mt-4 flex justify-center gap-3">
+            <button onClick={() => toggleWant("audio")} disabled={busyDev !== null} className={cn("btn gap-2 px-4 py-2.5", wantMic ? "btn-primary" : "btn-outline")}>
+              {busyDev === "audio" ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : wantMic ? <Mic size={18} /> : <MicOff size={18} />}
+              {wantMic ? "Микрофон включён" : "Микрофон выключен"}
+            </button>
+            <button onClick={() => toggleWant("video")} disabled={busyDev !== null} className={cn("btn gap-2 px-4 py-2.5", wantCam ? "btn-primary" : "btn-outline")}>
+              {busyDev === "video" ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : wantCam ? <Video size={18} /> : <VideoOff size={18} />}
+              {wantCam ? "Камера включена" : "Камера выключена"}
+            </button>
+          </div>
           {room.error && <p className="mt-3 rounded-xl bg-rose-soft p-3 text-sm text-rose">{room.error}</p>}
           <div className="mt-5 flex flex-wrap justify-center gap-2">
             <button onClick={room.join} className="btn btn-primary px-6 py-3"><Video size={18} /> Присоединиться</button>
