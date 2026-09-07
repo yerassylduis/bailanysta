@@ -82,6 +82,16 @@ export function useCallRoom(callId: string, me: UserDto | null) {
     api.signal(callId, type, to, payload).catch((e) => console.warn("[call] signal failed", type, e)), [callId]);
 
   const updatePeer = (id: string, patch: Partial<Peer>) => setPeers((p) => (p[id] ? { ...p, [id]: { ...p[id], ...patch } } : p));
+  /** Применить только присланные поля состояния (muted/camOff/sharing/recording), не трогая остальные. */
+  const applyState = (id: string, st: Partial<Peer> | undefined) => {
+    if (!st) return;
+    const patch: Partial<Peer> = {};
+    if (st.muted !== undefined) patch.muted = !!st.muted;
+    if (st.camOff !== undefined) patch.camOff = !!st.camOff;
+    if (st.sharing !== undefined) patch.sharing = !!st.sharing;
+    if (st.recording !== undefined) patch.recording = !!st.recording;
+    if (Object.keys(patch).length) updatePeer(id, patch);
+  };
   const ensurePeer = (user: UserDto) => setPeers((p) => (p[user.id] ? p : { ...p, [user.id]: { user, stream: null, muted: false, camOff: false, sharing: false, recording: false, version: 0, connected: false } }));
 
   /** Инициатор пары — участник с меньшим id (детерминированно для обеих сторон). */
@@ -172,6 +182,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
         case "offer": {
           const { sdp, state, gen: theirGen, restart, renegotiate } = s.payload as { sdp: RTCSessionDescriptionInit; state?: Partial<Peer>; gen?: number; restart?: boolean; renegotiate?: boolean };
           let pc = pcs.current.get(from.id);
+          const firstTime = !pc || pc.connectionState === "closed";
           if (!pc || pc.connectionState === "closed") pc = createPc(from);
           if (pc.signalingState === "have-local-offer") {
             // встречные offer: невежливый (инициатор) игнорирует чужой, вежливый откатывается и принимает
@@ -188,7 +199,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
           await pc.setLocalDescription(answer);
           await signal("answer", from.id, { sdp: pc.localDescription, state: stateRef.current, gen: theirGen ?? null });
           console.info("[call] answer →", from.handle, "for gen", theirGen, restart ? "(ice-restart)" : "");
-          if (state) updatePeer(from.id, { muted: !!state.muted, camOff: !!state.camOff, sharing: !!state.sharing });
+          if (firstTime && !renegotiate) applyState(from.id, state);
           break;
         }
         case "answer": {
@@ -201,7 +212,8 @@ export function useCallRoom(callId: string, me: UserDto | null) {
             await flushIce(from.id);
             console.info("[call] answer ←", from.handle, "applied");
           } else console.info("[call] answer ←", from.handle, "ignored, state", pc?.signalingState);
-          if (state) updatePeer(from.id, { muted: !!state.muted, camOff: !!state.camOff, sharing: !!state.sharing });
+          // состояние из answer применяем лишь если о собеседнике ещё ничего не знаем (первый ответ)
+          if (!peersRef.current[from.id]?.stream) applyState(from.id, state);
           break;
         }
         case "ice": {
@@ -215,14 +227,11 @@ export function useCallRoom(callId: string, me: UserDto | null) {
         case "state": {
           const payload = s.payload as Partial<Peer> & { hello?: boolean };
           ensurePeer(from);
-          if (payload.muted !== undefined || payload.camOff !== undefined || payload.sharing !== undefined) {
-            updatePeer(from.id, { muted: !!payload.muted, camOff: !!payload.camOff, sharing: !!payload.sharing });
-          }
           if (payload.recording !== undefined) {
             const was = peersRef.current[from.id]?.recording ?? false;
-            updatePeer(from.id, { recording: !!payload.recording });
             if (payload.recording && !was) announceRecording(from.name);
           }
+          applyState(from.id, payload);
           // «привет» новичка: если соединения с ним ещё НЕТ вообще (join потерялся) — инициатор шлёт offer.
           // Если соединение уже есть (в любом состоянии) — ничего не трогаем: оно договаривается.
           if (payload.hello && iAmInitiator(from.id) && !pcs.current.has(from.id)) await makeOffer(from);
@@ -566,12 +575,13 @@ export function useCallRoom(callId: string, me: UserDto | null) {
   const stopShare = useCallback(async () => {
     screenStream.current?.getTracks().forEach((t) => t.stop());
     screenStream.current = null;
+    stateRef.current = { ...stateRef.current, sharing: false }; setSharing(false);
+    signal("state", null, { sharing: false });
     await swapVideoTrack(camTrack.current);
     for (const pc of pcs.current.values()) {
       const sender = pc.getSenders().find((x) => x.track?.kind === "video");
       if (sender) { const prm = sender.getParameters(); prm.degradationPreference = "balanced"; if (prm.encodings?.[0]) delete prm.encodings[0].maxBitrate; sender.setParameters(prm).catch(() => {}); }
     }
-    setSharing(false); signal("state", null, { sharing: false });
   }, [swapVideoTrack, signal]);
 
   const startShare = useCallback(async () => {
@@ -581,13 +591,15 @@ export function useCallRoom(callId: string, me: UserDto | null) {
       const track = s.getVideoTracks()[0];
       try { track.contentHint = "motion"; } catch {}
       track.onended = () => { stopShare(); };
+      // флаг — до пересогласования, чтобы offer нёс актуальное состояние
+      stateRef.current = { ...stateRef.current, sharing: true }; setSharing(true);
+      signal("state", null, { sharing: true });
       await swapVideoTrack(track);
       // для экрана держим разрешение (текст читаем), а не частоту кадров
       for (const pc of pcs.current.values()) {
         const sender = pc.getSenders().find((x) => x.track === track);
         if (sender) { const prm = sender.getParameters(); prm.degradationPreference = "balanced"; if (prm.encodings?.[0]) prm.encodings[0].maxBitrate = 3_000_000; sender.setParameters(prm).catch(() => {}); }
       }
-      setSharing(true); signal("state", null, { sharing: true });
     } catch (e) { console.warn("[call] share cancelled", e); }
   }, [swapVideoTrack, signal, stopShare]);
 
