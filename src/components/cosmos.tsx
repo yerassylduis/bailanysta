@@ -24,8 +24,8 @@ const PLANETS: Planet[] = [
 ];
 
 /**
- * Солнце для светлой темы «Күн»: тёплый диск, широкое сияние и медленно вращающиеся мягкие лучи.
- * Никаких звёзд и планет — день.
+ * Свет для светлой темы «Күн»: без диска солнца — только широкое сияние и медленно
+ * вращающиеся мягкие лучи, расходящиеся из точки слева внизу. Никаких звёзд и планет — день.
  */
 function drawSun(ctx: CanvasRenderingContext2D, w: number, h: number, t: number, reduced: boolean) {
   const scale = Math.min(1, Math.max(0.6, w / 1400));
@@ -48,19 +48,16 @@ function drawSun(ctx: CanvasRenderingContext2D, w: number, h: number, t: number,
     const half = long ? 0.045 : 0.03;
     const g = ctx.createLinearGradient(0, 0, Math.cos(a) * len, Math.sin(a) * len);
     g.addColorStop(0, `rgba(255, 190, 80, ${long ? 0.22 : 0.14})`); g.addColorStop(1, "rgba(255, 200, 110, 0)");
-    ctx.beginPath(); ctx.moveTo(Math.cos(a) * r * 0.9, Math.sin(a) * r * 0.9);
+    ctx.beginPath(); ctx.moveTo(Math.cos(a) * r * 0.15, Math.sin(a) * r * 0.15);
     ctx.lineTo(Math.cos(a - half) * len, Math.sin(a - half) * len);
     ctx.lineTo(Math.cos(a + half) * len, Math.sin(a + half) * len);
     ctx.closePath(); ctx.fillStyle = g; ctx.fill();
   }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  // ближнее свечение и диск
-  const glow = ctx.createRadialGradient(cx, cy, r * 0.6, cx, cy, r * 2.4);
-  glow.addColorStop(0, "rgba(255, 214, 110, 0.9)"); glow.addColorStop(1, "rgba(255, 214, 110, 0)");
-  ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(cx, cy, r * 2.4, 0, Math.PI * 2); ctx.fill();
-  const disc = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.1, cx, cy, r);
-  disc.addColorStop(0, "#fff4c2"); disc.addColorStop(0.55, "#ffd66b"); disc.addColorStop(1, "#f5a623");
-  ctx.fillStyle = disc; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+  // Диска нет — только мягкое свечение в центре, из которого расходятся лучи.
+  const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 2.2);
+  glow.addColorStop(0, "rgba(255, 224, 150, 0.55)"); glow.addColorStop(0.5, "rgba(255, 214, 120, 0.18)"); glow.addColorStop(1, "rgba(255, 214, 110, 0)");
+  ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(cx, cy, r * 2.2, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
 
