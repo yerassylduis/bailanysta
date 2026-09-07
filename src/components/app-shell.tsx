@@ -39,9 +39,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-full">
-      <div className="mx-auto flex min-h-screen w-full max-w-7xl gap-5 px-3 sm:px-5 lg:gap-6">
+      {/* Панели прижаты к краям экрана, центр занимает всё между ними (с мягким пределом ширины для читаемости) */}
+      <div className="flex min-h-screen w-full gap-4 px-3 sm:px-4 lg:gap-6 lg:px-5">
         {/* Левая навигация */}
-        <aside className="sticky top-0 hidden h-screen w-52 shrink-0 flex-col overflow-y-auto py-5 no-scrollbar md:flex lg:w-60">
+        <aside className="sticky top-0 hidden h-screen w-52 shrink-0 flex-col overflow-y-auto py-5 no-scrollbar md:flex lg:w-56 xl:w-60">
           <Link href="/" className="mb-6 flex items-center gap-2.5 px-3">
             <Logo size={32} />
             <Wordmark />
@@ -76,6 +77,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Центр */}
         <main className={cn("min-w-0 flex-1 pt-3 md:pb-8 md:pt-5", isChat ? "pb-3" : "pb-24")}>
+          <div className="mx-auto w-full max-w-[1040px]">
           <header className={cn("mb-3 flex items-center justify-between md:hidden", isChat && "hidden")}>
             <Link href="/" className="flex items-center gap-2"><Logo size={28} /><Wordmark compact /></Link>
             <div className="flex items-center gap-0.5">
@@ -84,10 +86,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </header>
           {children}
+          </div>
         </main>
 
         {/* Правый рельс */}
-        <aside className="sticky top-0 hidden h-screen w-72 shrink-0 overflow-y-auto py-5 no-scrollbar xl:block">
+        <aside className="sticky top-0 hidden h-screen w-72 shrink-0 overflow-y-auto py-5 no-scrollbar xl:block 2xl:w-80">
           <RightRail />
         </aside>
       </div>
