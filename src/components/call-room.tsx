@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { UserPlus, Search, X, Check } from "lucide-react";
 import { useCallRoom, type Peer, type PeerStats } from "@/hooks/use-call-room";
-import { Activity, Volume2 } from "lucide-react";
+import { Activity, Volume2, Maximize, Minimize, Pin } from "lucide-react";
 import { Avatar, EmptyState } from "./ui";
 import { useToast } from "./toast";
 import { cn } from "@/lib/format";
@@ -22,6 +22,30 @@ export function CallRoom({ id }: { id: string }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [diagOpen, setDiagOpen] = useState(false);
+  const [pinned, setPinned] = useState<string | null>(null);
+  const [fs, setFs] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onFs = () => setFs(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+  const toggleFullscreen = (el: HTMLElement | null) => {
+    if (!el) return;
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else el.requestFullscreen().catch(() => toast("Браузер не разрешил полноэкранный режим"));
+  };
+  // Автоскачивание записи после остановки
+  const lastRec = useRef<string | null>(null);
+  useEffect(() => {
+    if (room.recordingUrl && room.recordingUrl !== lastRec.current) {
+      lastRec.current = room.recordingUrl;
+      const a = document.createElement("a"); a.href = room.recordingUrl; a.download = `bailanysta-${id}.${room.recordingExt}`; document.body.appendChild(a); a.click(); a.remove();
+      toast("Запись сохранена в загрузки браузера", "success");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.recordingUrl]);
   const [text, setText] = useState("");
   const chatBottom = useRef<HTMLDivElement>(null);
   // Непрочитанные в чате — производное: сколько сообщений пришло с момента, когда чат последний раз был открыт.
@@ -42,6 +66,10 @@ export function CallRoom({ id }: { id: string }) {
   ];
   const n = tiles.length;
   const cols = n <= 1 ? 1 : n <= 4 ? 2 : 3;
+  // Сцена: закреплённый участник, иначе тот, кто показывает экран (чужой экран приоритетнее своего)
+  const stageId = pinned ?? tiles.find((t) => t.sharing && !t.me)?.id ?? tiles.find((t) => t.sharing)?.id ?? null;
+  const stage = tiles.find((t) => t.id === stageId) ?? null;
+  const thumbs = stage ? tiles.filter((t) => t.id !== stage.id) : [];
 
   // Экран входа
   if (!room.joined) {
@@ -64,12 +92,13 @@ export function CallRoom({ id }: { id: string }) {
   }
 
   return (
-    <div className="flex h-[calc(100dvh-1.5rem)] flex-col gap-3 md:h-[calc(100dvh-3.5rem)]">
+    <div ref={rootRef} className={cn("flex flex-col gap-3", fs ? "h-screen bg-bg p-3" : "h-[calc(100dvh-1.5rem)] md:h-[calc(100dvh-3.5rem)]")}>
       <header className="flex items-center gap-2 px-1">
         <span className="flex h-2.5 w-2.5 animate-pulse rounded-full bg-rose" />
         <h1 className="truncate font-display text-base font-bold">{room.call?.title}</h1>
         <span className="hidden font-mono text-xs text-muted sm:inline">{id}</span>
         <span className="ml-auto flex items-center gap-1 text-xs text-muted"><Users size={14} /> {tiles.length}</span>
+        <button onClick={() => toggleFullscreen(rootRef.current)} className="btn btn-outline btn-icon h-9 w-9" aria-label={fs ? "Выйти из полноэкранного режима" : "Звонок на весь экран"} title={fs ? "Свернуть" : "На весь экран"}>{fs ? <Minimize size={16} /> : <Maximize size={16} />}</button>
         <div className="relative">
           <button onClick={() => setInviteOpen((o) => !o)} className="btn btn-primary px-3 py-1.5 text-xs"><UserPlus size={14} /> Пригласить</button>
           {inviteOpen && <InvitePopover callId={id} onClose={() => setInviteOpen(false)} onCopy={copyLink} inCall={new Set(tiles.map((t) => t.user.id))} />}
@@ -77,10 +106,37 @@ export function CallRoom({ id }: { id: string }) {
       </header>
 
       <div className="flex min-h-0 flex-1 gap-3">
-        {/* Сетка */}
-        <div className="grid min-h-0 flex-1 gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: "1fr" }}>
-          {tiles.map((t) => <Tile key={t.id} user={t.user} stream={t.stream} me={t.me} muted={t.muted} camOff={t.camOff} sharing={t.sharing} version={t.version} connected={t.connected} stats={t.me ? undefined : room.stats[t.id]} />)}
-        </div>
+        {stage ? (
+          /* Режим презентации: сцена во всю область + мини-плитки справа (на телефоне — снизу) */
+          <div className="flex min-h-0 flex-1 flex-col gap-2 md:flex-row">
+            <div ref={stageRef} className="group relative min-h-0 flex-1">
+              <Tile user={stage.user} stream={stage.stream} me={stage.me} muted={stage.muted} camOff={stage.camOff} sharing={stage.sharing} version={stage.version} connected={stage.connected} stats={stage.me ? undefined : room.stats[stage.id]} fit="contain" />
+              <div className="absolute right-2 top-2 flex gap-1.5 opacity-80 transition group-hover:opacity-100">
+                {pinned && <button onClick={() => setPinned(null)} className="btn bg-black/55 px-2.5 py-1 text-xs text-white backdrop-blur hover:bg-black/70"><Pin size={13} /> Открепить</button>}
+                <button onClick={() => toggleFullscreen(stageRef.current)} className="btn bg-black/55 px-2.5 py-1 text-xs text-white backdrop-blur hover:bg-black/70" title="Трансляцию на весь экран"><Maximize size={13} /> Во весь экран</button>
+              </div>
+            </div>
+            {thumbs.length > 0 && (
+              <div className="flex shrink-0 gap-2 overflow-x-auto md:w-44 md:flex-col md:overflow-y-auto lg:w-52">
+                {thumbs.map((t) => (
+                  <button key={t.id} onClick={() => setPinned(t.id)} className="relative aspect-video w-40 shrink-0 md:w-full" title="Показать крупно">
+                    <Tile user={t.user} stream={t.stream} me={t.me} muted={t.muted} camOff={t.camOff} sharing={t.sharing} version={t.version} connected={t.connected} stats={t.me ? undefined : room.stats[t.id]} compact />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Обычная сетка; клик по плитке закрепляет её на сцене */
+          <div className="grid min-h-0 flex-1 gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: "1fr" }}>
+            {tiles.map((t) => (
+              <div key={t.id} className="group relative min-h-0" onDoubleClick={() => setPinned(t.id)}>
+                <Tile user={t.user} stream={t.stream} me={t.me} muted={t.muted} camOff={t.camOff} sharing={t.sharing} version={t.version} connected={t.connected} stats={t.me ? undefined : room.stats[t.id]} />
+                {tiles.length > 1 && <button onClick={() => setPinned(t.id)} className="btn absolute right-2 top-2 bg-black/55 px-2.5 py-1 text-xs text-white opacity-0 backdrop-blur transition group-hover:opacity-100 hover:bg-black/70" title="Закрепить крупно"><Pin size={13} /> Крупно</button>}
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Чат */}
         <aside className={cn("card flex w-full flex-col overflow-hidden md:w-80", chatOpen ? "absolute inset-x-3 bottom-24 top-20 z-30 flex md:static md:inset-auto" : "hidden")}>
@@ -152,7 +208,7 @@ function Ctl({ on, accent, danger, onClick, label, children }: { on: boolean; ac
 }
 
 /** Плитка участника: видео (или аватар при выключенной камере), имя, индикаторы, подсказки по диагностике. */
-function Tile({ user, stream, me, muted, camOff, sharing, version, connected, stats }: { user: UserDto; stream: MediaStream | null; me?: boolean; muted: boolean; camOff: boolean; sharing: boolean; version: number; connected: boolean; stats?: PeerStats }) {
+function Tile({ user, stream, me, muted, camOff, sharing, version, connected, stats, fit, compact }: { user: UserDto; stream: MediaStream | null; me?: boolean; muted: boolean; camOff: boolean; sharing: boolean; version: number; connected: boolean; stats?: PeerStats; fit?: "cover" | "contain"; compact?: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [blocked, setBlocked] = useState(false);
   useEffect(() => {
@@ -164,17 +220,17 @@ function Tile({ user, stream, me, muted, camOff, sharing, version, connected, st
   }, [stream, version, user.handle]);
   const videoTrack = stream?.getVideoTracks()[0];
   const hasVideo = !!videoTrack && videoTrack.readyState === "live" && !videoTrack.muted && !camOff;
-  const noFrames = !me && connected && hasVideo && stats && stats.framesDecoded === 0 && stats.videoBytes === 0;
+  const noFrames = !compact && !me && connected && hasVideo && stats && stats.framesDecoded === 0 && stats.videoBytes === 0;
   return (
-    <div className="relative min-h-0 overflow-hidden rounded-2xl border border-line bg-black">
-      <video ref={ref} data-call-tile={user.name} autoPlay playsInline muted={me} className={cn("h-full w-full object-cover", sharing && "object-contain", !hasVideo && "opacity-0", me && !sharing && "scale-x-[-1]")} />
+    <div className={cn("relative h-full min-h-0 w-full overflow-hidden border border-line bg-black", compact ? "rounded-xl" : "rounded-2xl")}>
+      <video ref={ref} data-call-tile={user.name} autoPlay playsInline muted={me} className={cn("h-full w-full", fit === "contain" || sharing ? "object-contain" : "object-cover", !hasVideo && "opacity-0", me && !sharing && "scale-x-[-1]")} />
       {!hasVideo && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg-2 px-4 text-center">
-          <Avatar user={user} size={72} />
-          {!me && !connected && <span className="text-xs text-muted">Соединяемся…</span>}
-          {!me && !connected && <span className="max-w-[80%] text-[11px] text-muted/70">Если дольше 20 секунд — сети не соединяются напрямую, нужен TURN-релей (см. README)</span>}
-          {!me && connected && camOff && <span className="text-xs text-muted">Камера выключена</span>}
-          {!me && connected && !camOff && <span className="text-xs text-muted">Видео от собеседника пока не поступает</span>}
+          <Avatar user={user} size={compact ? 36 : 72} />
+          {!compact && !me && !connected && <span className="text-xs text-muted">Соединяемся…</span>}
+          {!compact && !me && !connected && <span className="max-w-[80%] text-[11px] text-muted/70">Если дольше 20 секунд — сети не соединяются напрямую, нужен TURN-релей (см. README)</span>}
+          {!compact && !me && connected && camOff && <span className="text-xs text-muted">Камера выключена</span>}
+          {!compact && !me && connected && !camOff && <span className="text-xs text-muted">Видео от собеседника пока не поступает</span>}
         </div>
       )}
       {noFrames && (
@@ -185,9 +241,9 @@ function Tile({ user, stream, me, muted, camOff, sharing, version, connected, st
       {blocked && !me && (
         <button onClick={() => { ref.current?.play().then(() => setBlocked(false)).catch(() => {}); }} className="btn btn-primary absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"><Volume2 size={16} /> Включить видео и звук</button>
       )}
-      <div className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur">
-        {muted && <MicOff size={12} className="text-rose" />}{sharing && <MonitorUp size={12} className="text-accent" />}
-        {user.name}{me && " (вы)"}
+      <div className={cn("absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-black/55 font-semibold text-white backdrop-blur", compact ? "max-w-[90%] px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-xs")}>
+        {muted && <MicOff size={compact ? 10 : 12} className="text-rose" />}{sharing && <MonitorUp size={compact ? 10 : 12} className="text-accent" />}
+        <span className="truncate">{user.name}{me && " (вы)"}{sharing && !compact && " · экран"}</span>
       </div>
     </div>
   );
