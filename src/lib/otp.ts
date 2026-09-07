@@ -1,4 +1,5 @@
 import { createHash, randomInt, timingSafeEqual } from "node:crypto";
+import nodemailer, { type Transporter } from "nodemailer";
 import { and, desc, eq, gt } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { HttpError } from "./auth";
@@ -6,8 +7,9 @@ import { newId, nowIso } from "./ids";
 
 /**
  * Одноразовые коды входа и регистрации.
- * Доставка: почта через Resend (RESEND_API_KEY, MAIL_FROM), SMS через Twilio
- * (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM). Если провайдер канала не настроен —
+ * Доставка почты: SMTP (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_FROM — например Gmail с паролем приложения)
+ * или Resend (RESEND_API_KEY, MAIL_FROM). SMS — Twilio (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM).
+ * Если провайдер канала не настроен —
  * демо-режим: код возвращается клиенту и показывается на экране (честно помечено в интерфейсе и README).
  */
 
@@ -34,9 +36,28 @@ export function normalizeTarget(raw: string): { target: string; channel: Channel
 
 const hash = (target: string, code: string) => createHash("sha256").update(`${target}:${code}:${process.env.SESSION_SECRET ?? "dev"}`).digest("hex");
 
+const smtpConfigured = () => !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+
 export function providerConfigured(channel: Channel) {
-  return channel === "email" ? !!process.env.RESEND_API_KEY : !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM);
+  return channel === "email" ? smtpConfigured() || !!process.env.RESEND_API_KEY : !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM);
 }
+
+let transporter: Transporter | null = null;
+function smtp() {
+  if (!transporter) {
+    const port = Number(process.env.SMTP_PORT ?? 465);
+    transporter = nodemailer.createTransport({ host: process.env.SMTP_HOST, port, secure: port === 465, auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } });
+  }
+  return transporter;
+}
+
+const html = (code: string) => `<div style="font-family:system-ui,sans-serif;max-width:420px;margin:0 auto;padding:24px;border:1px solid #e6e8f3;border-radius:16px">
+  <div style="font-size:12px;letter-spacing:.2em;color:#0aa39a;font-weight:700">EXPERT</div>
+  <div style="font-size:22px;font-weight:800;margin-bottom:16px">Bailanysta</div>
+  <p style="color:#3a362f">Ваш код входа:</p>
+  <div style="font-size:36px;font-weight:800;letter-spacing:.3em;margin:8px 0 16px">${code}</div>
+  <p style="color:#6f6a60;font-size:13px">Действует 10 минут. Если вы не запрашивали код — просто проигнорируйте письмо.</p>
+</div>`;
 
 async function deliver(channel: Channel, target: string, code: string): Promise<"sent" | "screen"> {
   const text = `Ваш код входа в Expert Bailanysta: ${code}. Действует 10 минут. Никому его не сообщайте.`;
@@ -44,10 +65,19 @@ async function deliver(channel: Channel, target: string, code: string): Promise<
     console.info(`[otp] демо-режим, код для ${target}: ${code}`);
     return "screen";
   }
+  if (channel === "email" && smtpConfigured()) {
+    try {
+      await smtp().sendMail({ from: process.env.MAIL_FROM ?? process.env.SMTP_USER, to: target, subject: `Код входа: ${code}`, text, html: html(code) });
+      return "sent";
+    } catch (e) {
+      console.error("[otp] smtp", e instanceof Error ? e.message : e);
+      throw new HttpError(502, "Не удалось отправить письмо. Попробуйте позже");
+    }
+  }
   if (channel === "email") {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST", headers: { authorization: `Bearer ${process.env.RESEND_API_KEY}`, "content-type": "application/json" },
-      body: JSON.stringify({ from: process.env.MAIL_FROM ?? "Expert Bailanysta <onboarding@resend.dev>", to: [target], subject: `Код входа: ${code}`, text }),
+      body: JSON.stringify({ from: process.env.MAIL_FROM ?? "Expert Bailanysta <onboarding@resend.dev>", to: [target], subject: `Код входа: ${code}`, text, html: html(code) }),
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) throw new HttpError(502, "Не удалось отправить письмо. Попробуйте позже");
