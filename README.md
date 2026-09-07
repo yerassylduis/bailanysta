@@ -118,6 +118,9 @@ npm run db:studio  # Drizzle Studio — посмотреть таблицы
 | `ANTHROPIC_API_KEY` | ключ Anthropic для Cosmos и умных ответов бота; без него Cosmos работает в офлайн-режиме (шаблоны), а перевод идёт через бесплатный MyMemory |
 | `BLOB_READ_WRITE_TOKEN` | токен Vercel Blob для постоянного хранения фото/видео; без него файлы пишутся на диск (`./data/media`, на Vercel — `/tmp`) |
 | `MAX_VIDEO_MB` | лимит видео, по умолчанию 60 (на Vercel тело запроса ограничено 4.5 МБ) |
+| `CF_TURN_KEY_ID`, `CF_TURN_API_TOKEN` | TURN-релей Cloudflare Calls для звонков между разными сетями (бесплатно до 1 ТБ/мес) |
+| `METERED_DOMAIN`, `METERED_API_KEY` | альтернатива — TURN от Metered.ca |
+| `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL` | свой coturn или любой другой TURN |
 
 ---
 

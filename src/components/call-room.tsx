@@ -143,6 +143,7 @@ function Tile({ user, stream, me, muted, camOff, sharing, version, connected }: 
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg-2">
           <Avatar user={user} size={72} />
           {!me && !connected && <span className="text-xs text-muted">Соединяемся…</span>}
+          {!me && !connected && <span className="max-w-[80%] text-center text-[11px] text-muted/70">Если дольше 20 секунд — сети не соединяются напрямую, нужен TURN-релей (см. README)</span>}
           {!me && connected && camOff && <span className="text-xs text-muted">Камера выключена</span>}
         </div>
       )}
