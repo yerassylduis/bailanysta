@@ -10,7 +10,7 @@ import { Avatar, Skeleton } from "./ui";
 import { RichText } from "./rich-text";
 import { useToast } from "./toast";
 
-/** Комментарии к посту + форма. Муза умеет предложить варианты ответа. */
+/** Комментарии к посту + форма. Cosmos умеет предложить варианты ответа. */
 export function Comments({ postId, postText }: { postId: string; postText: string }) {
   const { data: me } = useMe();
   const q = useComments(postId);
@@ -43,7 +43,7 @@ export function Comments({ postId, postText }: { postId: string; postText: strin
             )}
             <div className="mt-2 flex items-center gap-2">
               <button onClick={() => muse.mutate({ mode: "reply", text: postText })} disabled={muse.isPending} className="btn btn-ghost px-3 py-1.5 text-xs text-saffron">
-                <Sparkles size={14} /> {muse.isPending ? "Муза думает…" : "Подсказать ответ"}
+                <Sparkles size={14} /> {muse.isPending ? "Cosmos думает…" : "Подсказать ответ"}
               </button>
               <span className="ml-auto text-xs text-muted">{COMMENT_MAX - text.length}</span>
               <button onClick={submit} disabled={!text.trim() || add.isPending} className="btn btn-primary px-3 py-1.5 text-xs"><Send size={14} /> Отправить</button>

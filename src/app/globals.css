@@ -6,8 +6,8 @@
 :root {
   color-scheme: light;
   /* Күн — день: чистый светлый фон, насыщенная бирюза, тёплый шафран, контрастный текст */
-  --bg: #f6f4ee;
-  --bg-2: #ecebe4;
+  --bg: #f2f3fa;
+  --bg-2: #e6e8f3;
   --elev: #ffffff;
   --ink: #15130f;
   --ink-2: #3a362f;
@@ -23,15 +23,15 @@
   --rose-soft: rgba(229, 71, 47, 0.12);
   --violet: #7c6cf3;
   --shadow: 0 1px 2px rgba(21, 19, 15, 0.04), 0 10px 30px -14px rgba(21, 19, 15, 0.18);
-  --ornament-opacity: 0.22;
+  --ornament-opacity: 0.14;
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
   /* Түн — ночь: глубокое небо, яркий текст, светящиеся акценты */
-  --bg: #0b1020;
-  --bg-2: #141b30;
-  --elev: #171f38;
+  --bg: #070b18;
+  --bg-2: #111832;
+  --elev: #141c36;
   --ink: #f6f1e6;
   --ink-2: #d6d0c2;
   --muted: #9b98ab;
@@ -46,7 +46,7 @@
   --rose-soft: rgba(255, 125, 103, 0.18);
   --violet: #9d90ff;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 40px -18px rgba(0, 0, 0, 0.7);
-  --ornament-opacity: 0.25;
+  --ornament-opacity: 0.16;
 }
 
 @theme inline {
@@ -91,29 +91,24 @@ body {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%230aa39a' stroke-opacity='0.5' stroke-width='1.1'%3E%3Cpath d='M60 12c-14 0-24 10-24 22 0 10 8 16 16 16 6 0 10-4 10-9 0-4-3-7-7-7'/%3E%3Cpath d='M60 12c14 0 24 10 24 22 0 10-8 16-16 16-6 0-10-4-10-9 0-4 3-7 7-7'/%3E%3Cpath d='M60 108c-14 0-24-10-24-22 0-10 8-16 16-16 6 0 10 4 10 9 0 4-3 7-7 7'/%3E%3Cpath d='M60 108c14 0 24-10 24-22 0-10-8-16-16-16-6 0-10 4-10 9 0 4 3 7 7 7'/%3E%3Ccircle cx='60' cy='60' r='3'/%3E%3C/g%3E%3C/svg%3E");
 }
 
-/* Небо: мягкие пятна света днём, звёзды ночью */
-.sky {
-  position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  background:
-    radial-gradient(1100px 500px at 15% -10%, var(--accent-soft), transparent 60%),
-    radial-gradient(900px 480px at 95% 0%, var(--saffron-soft), transparent 60%);
+/* Космос: слой за контентом — туманности (CSS) + звёзды (canvas) */
+.cosmos { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; background: var(--bg); transition: background-color .3s ease; }
+.cosmos canvas { position: absolute; inset: 0; }
+.nebula {
+  position: absolute; border-radius: 50%; filter: blur(70px); opacity: .55; will-change: transform;
+  animation: nebula-drift 38s ease-in-out infinite alternate;
 }
-[data-theme="dark"] .sky::after {
-  content: ""; position: absolute; inset: 0; opacity: 0.8;
-  background-image:
-    radial-gradient(1.2px 1.2px at 12% 18%, #fff 60%, transparent 61%),
-    radial-gradient(1px 1px at 33% 42%, #fff 60%, transparent 61%),
-    radial-gradient(1.5px 1.5px at 58% 12%, #fff 60%, transparent 61%),
-    radial-gradient(1px 1px at 72% 66%, #fff 60%, transparent 61%),
-    radial-gradient(1.2px 1.2px at 88% 28%, #fff 60%, transparent 61%),
-    radial-gradient(1px 1px at 45% 82%, #fff 60%, transparent 61%),
-    radial-gradient(1.4px 1.4px at 8% 76%, #fff 60%, transparent 61%),
-    radial-gradient(1px 1px at 95% 88%, #fff 60%, transparent 61%),
-    radial-gradient(1px 1px at 25% 95%, #fff 60%, transparent 61%),
-    radial-gradient(1.2px 1.2px at 65% 45%, #fff 60%, transparent 61%);
-  animation: twinkle 6s ease-in-out infinite alternate;
+.nebula-a { width: 60vmax; height: 60vmax; left: -20vmax; top: -25vmax; background: radial-gradient(circle, var(--accent-soft), transparent 65%); }
+.nebula-b { width: 55vmax; height: 55vmax; right: -22vmax; top: -10vmax; background: radial-gradient(circle, rgba(124,108,243,.22), transparent 65%); animation-duration: 47s; animation-delay: -12s; }
+.nebula-c { width: 50vmax; height: 50vmax; left: 30vw; bottom: -30vmax; background: radial-gradient(circle, var(--saffron-soft), transparent 65%); animation-duration: 55s; animation-delay: -25s; }
+[data-theme="dark"] .nebula { opacity: .8; }
+[data-theme="dark"] .nebula-b { background: radial-gradient(circle, rgba(124,108,243,.35), transparent 65%); }
+@keyframes nebula-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(6vw, 4vh, 0) scale(1.12); }
 }
-@keyframes twinkle { from { opacity: 0.45; } to { opacity: 0.95; } }
+@media (prefers-reduced-motion: reduce) { .nebula { animation: none; } }
+
 
 /* Компонентные классы — в слое components, чтобы утилиты Tailwind (p-0, pl-10…) их переопределяли */
 @layer components {

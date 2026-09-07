@@ -4,18 +4,19 @@ import { cookies } from "next/headers";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { AppShell } from "@/components/app-shell";
+import { Cosmos } from "@/components/cosmos";
 import { THEME_COOKIE, type Theme } from "@/lib/theme";
 
 const display = Unbounded({ subsets: ["latin", "cyrillic"], variable: "--font-display", weight: ["500", "700", "900"] });
 const sans = Manrope({ subsets: ["latin", "cyrillic"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: { default: "Bailanysta — байланыс между людьми", template: "%s · Bailanysta" },
-  description: "Bailanysta — небольшая уютная социальная сеть: посты, лента, созвездие связей и ИИ-соавтор Муза.",
+  title: { default: "Expert Bailanysta — байланыс между людьми", template: "%s · Expert Bailanysta" },
+  description: "Expert Bailanysta — небольшая уютная социальная сеть: посты, лента, созвездие связей и ИИ-соавтор Cosmos.",
   icons: { icon: "/icon.svg" },
 };
 
-export const viewport: Viewport = { themeColor: "#f6f4ee", width: "device-width", initialScale: 1, viewportFit: "cover" };
+export const viewport: Viewport = { themeColor: "#f2f3fa", width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 /* Скрипт исполняется до первой отрисовки, чтобы тема не «мигала». */
 const themeScript = `(function(){try{var t=localStorage.getItem('bl_theme');document.documentElement.setAttribute('data-theme',t==='dark'?'dark':'light')}catch(e){}})();`;
@@ -28,7 +29,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {!cookieTheme && <script dangerouslySetInnerHTML={{ __html: themeScript }} />}
       </head>
       <body className="min-h-full">
-        <div className="sky" aria-hidden />
+        <Cosmos />
         <Providers initialTheme={cookieTheme ?? null}>
           <AppShell>{children}</AppShell>
         </Providers>

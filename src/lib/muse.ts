@@ -5,7 +5,7 @@ import type { MuseRequest, MuseResponse } from "./types";
 import { extractTags } from "./text";
 
 /**
- * «Муза» — ИИ-соавтор Bailanysta.
+ * «Cosmos» — ИИ-соавтор Expert Bailanysta.
  * Работает через Anthropic SDK строго на сервере. Если ключа нет или API недоступен,
  * переключается в офлайн-режим с локальными эвристиками — приложение не ломается.
  */
@@ -14,7 +14,7 @@ const MODEL = "claude-opus-5";
 
 const Out = z.object({ variants: z.array(z.string()).min(1).max(4) });
 
-const SYSTEM = `Ты — Муза, соавтор в социальной сети Bailanysta (bailanys — «связь» по-казахски).
+const SYSTEM = `Ты — Cosmos, соавтор в социальной сети Expert Bailanysta (bailanys — «связь» по-казахски).
 Аудитория: молодые инженеры, дизайнеры, студенты из Казахстана. Тон — живой, тёплый, без канцелярита и без кринжа.
 Пиши на языке исходного текста (казахский, русский или английский), если не попросили перевести.
 Пост — до 280 символов, без эмодзи-спама (максимум один), хэштеги только по делу.
@@ -40,7 +40,7 @@ function detectLang(t: string): "kk" | "ru" | "en" {
 
 /**
  * Резервный переводчик — бесплатный MyMemory (без ключа, лимит ~5000 символов в день с одного IP).
- * Вызывается только с сервера; при любой ошибке возвращает null, и Муза честно скажет об этом.
+ * Вызывается только с сервера; при любой ошибке возвращает null, и Cosmos честно скажет об этом.
  */
 async function freeTranslate(text: string, to: "kk" | "ru" | "en"): Promise<string | null> {
   const from = detectLang(text);
@@ -61,7 +61,7 @@ export async function muse(req: MuseRequest): Promise<MuseResponse> {
       if (out) return { variants: [out], source: "offline", note: "перевод выполнен бесплатным сервисом MyMemory, без ИИ" };
       return offline(req, "переводчик недоступен");
     }
-    return offline(req, "Ключ ANTHROPIC_API_KEY не задан — Муза работает офлайн");
+    return offline(req, "Ключ ANTHROPIC_API_KEY не задан — Cosmos работает офлайн");
   }
   try {
     const client = new Anthropic({ timeout: 25_000, maxRetries: 1 });
@@ -73,7 +73,7 @@ export async function muse(req: MuseRequest): Promise<MuseResponse> {
       output_config: { format: zodOutputFormat(Out), effort: "low" },
     });
     if (response.stop_reason === "refusal" || !response.parsed_output) {
-      return offline(req, "Муза не смогла ответить на этот запрос");
+      return offline(req, "Cosmos не смогла ответить на этот запрос");
     }
     return { variants: response.parsed_output.variants.map((v) => v.trim()).filter(Boolean), source: "claude" };
   } catch (e) {

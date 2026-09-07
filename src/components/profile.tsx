@@ -26,7 +26,7 @@ export function Profile({ handle }: { handle: string }) {
   const [saving, setSaving] = useState(false);
 
   if (q.isPending) return <ProfileSkeleton />;
-  if (q.isError) return <EmptyState title="Такого человека здесь нет" text={`@${handle} ещё не присоединился к Bailanysta.`} action={<Link href="/" className="btn btn-outline">В ленту</Link>} />;
+  if (q.isError) return <EmptyState title="Такого человека здесь нет" text={`@${handle} ещё не присоединился к Expert Bailanysta.`} action={<Link href="/" className="btn btn-outline">В ленту</Link>} />;
   const p = q.data;
   const own = meData?.user?.id === p.id;
 
@@ -94,7 +94,7 @@ export function Profile({ handle }: { handle: string }) {
       {own && <PostEditor />}
 
       <h2 className="px-1 font-display text-sm font-bold uppercase tracking-wider text-muted">Посты</h2>
-      <Feed filter={{ author: p.handle }} emptyTitle={own ? "Вы ещё ничего не написали" : "Здесь пока пусто"} emptyText={own ? "Первый пост — самый лёгкий. Муза поможет." : "Автор ещё собирается с мыслями."} />
+      <Feed filter={{ author: p.handle }} emptyTitle={own ? "Вы ещё ничего не написали" : "Здесь пока пусто"} emptyText={own ? "Первый пост — самый лёгкий. Cosmos поможет." : "Автор ещё собирается с мыслями."} />
     </div>
   );
 }

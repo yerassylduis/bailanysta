@@ -2,7 +2,7 @@ import { getPost } from "@/lib/repo";
 import { avatarColor, ogCard } from "@/lib/og";
 import { moodById } from "@/lib/text";
 
-export const alt = "Пост в Bailanysta";
+export const alt = "Пост в Expert Bailanysta";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 

@@ -44,7 +44,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <aside className="sticky top-0 hidden h-screen w-52 shrink-0 flex-col overflow-y-auto py-5 no-scrollbar md:flex lg:w-60">
           <Link href="/" className="mb-6 flex items-center gap-2.5 px-3">
             <Logo size={32} />
-            <span className="font-display text-lg font-bold tracking-tight">Bailanysta</span>
+            <Wordmark />
           </Link>
           <nav className="flex flex-col gap-0.5">
             {items.map((it) => (
@@ -77,7 +77,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* Центр */}
         <main className={cn("min-w-0 flex-1 pt-3 md:pb-8 md:pt-5", isChat ? "pb-3" : "pb-24")}>
           <header className={cn("mb-3 flex items-center justify-between md:hidden", isChat && "hidden")}>
-            <Link href="/" className="flex items-center gap-2"><Logo size={28} /><span className="font-display text-lg font-bold">Bailanysta</span></Link>
+            <Link href="/" className="flex items-center gap-2"><Logo size={28} /><Wordmark compact /></Link>
             <div className="flex items-center gap-0.5">
               <button onClick={palette.open} className="btn btn-ghost btn-icon" aria-label="Поиск"><Search size={21} /></button>
               <ThemeToggle compact />
@@ -137,5 +137,15 @@ export function ThemeToggle({ compact }: { compact?: boolean }) {
       <button role="radio" aria-checked={!dark} onClick={() => setTheme("light")} className={cn("flex flex-1 items-center justify-center gap-1.5", !dark && "seg-on")}><Sun size={15} /> Күн</button>
       <button role="radio" aria-checked={dark} onClick={() => setTheme("dark")} className={cn("flex flex-1 items-center justify-center gap-1.5", dark && "seg-on")}><Moon size={15} /> Түн</button>
     </div>
+  );
+}
+
+/** Словесный знак: «Expert» мелким акцентом над «Bailanysta». */
+export function Wordmark({ compact }: { compact?: boolean }) {
+  return (
+    <span className="leading-none">
+      <span className="block text-[10px] font-bold uppercase tracking-[0.22em] text-accent">Expert</span>
+      <span className={cn("block font-display font-bold tracking-tight", compact ? "text-base" : "text-lg")}>Bailanysta</span>
+    </span>
   );
 }

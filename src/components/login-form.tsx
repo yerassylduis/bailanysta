@@ -40,7 +40,7 @@ export function LoginForm() {
   return (
     <div className="mx-auto max-w-md pt-6 sm:pt-16">
       <div className="card fade-in p-6 sm:p-8">
-        <div className="mb-6 flex items-center gap-3"><Logo size={36} /><div><h1 className="font-display text-2xl font-bold">Войти в Bailanysta</h1><p className="text-sm text-muted">Без пароля. Ник — это и есть вы.</p></div></div>
+        <div className="mb-6 flex items-center gap-3"><Logo size={36} /><div><h1 className="font-display text-2xl font-bold">Войти в Expert Bailanysta</h1><p className="text-sm text-muted">Без пароля. Ник — это и есть вы.</p></div></div>
         <form onSubmit={(e) => { e.preventDefault(); if (valid) go(handle, name); }} className="space-y-3">
           <label className="block">
             <span className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted">Ник</span>

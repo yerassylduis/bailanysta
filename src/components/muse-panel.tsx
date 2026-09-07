@@ -8,14 +8,14 @@ import { cn } from "@/lib/format";
 import { Skeleton } from "./ui";
 
 const MODES: Array<{ id: MuseMode; label: string; icon: React.ReactNode; needsText: string }> = [
-  { id: "draft", label: "Набросок → пост", icon: <PenLine size={14} />, needsText: "Напишите тему или пару слов — Муза развернёт их в пост." },
+  { id: "draft", label: "Набросок → пост", icon: <PenLine size={14} />, needsText: "Напишите тему или пару слов — Cosmos развернёт их в пост." },
   { id: "polish", label: "Отполировать", icon: <Wand2 size={14} />, needsText: "Вставьте текст, который хотите улучшить." },
   { id: "hashtags", label: "Хэштеги", icon: <Hash size={14} />, needsText: "Нужен текст поста, чтобы подобрать теги." },
   { id: "translate", label: "Перевести", icon: <Languages size={14} />, needsText: "Нужен текст для перевода." },
-  { id: "caption", label: "Подпись к медиа", icon: <ImageIcon size={14} />, needsText: "Опишите фото или видео парой слов — Муза придумает подпись." },
+  { id: "caption", label: "Подпись к медиа", icon: <ImageIcon size={14} />, needsText: "Опишите фото или видео парой слов — Cosmos придумает подпись." },
 ];
 
-/** Панель Музы внутри редактора: режимы, варианты, вставка одним кликом. */
+/** Панель Cosmos внутри редактора: режимы, варианты, вставка одним кликом. */
 export function MusePanel({ text, onPick, onClose, hasMedia }: { text: string; onPick: (v: string) => void; onClose: () => void; hasMedia?: boolean }) {
   const [mode, setMode] = useState<MuseMode>(hasMedia ? "caption" : "draft");
   const [lang, setLang] = useState<"kk" | "ru" | "en">("kk");
@@ -28,7 +28,7 @@ export function MusePanel({ text, onPick, onClose, hasMedia }: { text: string; o
     <div className="fade-in mt-3 rounded-xl border border-saffron/30 bg-saffron-soft/40 p-3">
       <div className="flex items-center gap-2">
         <Sparkles size={15} className="text-saffron" />
-        <span className="text-sm font-semibold">Муза</span>
+        <span className="text-sm font-semibold">Cosmos</span>
         <span className="text-xs text-muted">· ИИ-соавтор</span>
         <button onClick={onClose} className="btn btn-ghost ml-auto h-7 w-7 p-0" aria-label="Закрыть"><X size={14} /></button>
       </div>
@@ -46,7 +46,7 @@ export function MusePanel({ text, onPick, onClose, hasMedia }: { text: string; o
       </div>
       <div className="mt-2.5 flex items-center gap-2">
         <button onClick={run} disabled={!ready || muse.isPending} className="btn btn-primary px-3 py-1.5 text-xs" style={{ background: "var(--saffron)", color: "#1d1a16" }}>
-          {muse.isPending ? "Муза думает…" : "Предложить варианты"}
+          {muse.isPending ? "Cosmos думает…" : "Предложить варианты"}
         </button>
         {!ready && <span className="text-xs text-muted">{MODES.find((m) => m.id === mode)?.needsText}</span>}
       </div>

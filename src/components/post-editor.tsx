@@ -15,7 +15,7 @@ import { AttachButton, AttachmentPreviews } from "./media";
 import { useToast } from "./toast";
 
 /**
- * Редактор поста: создание и правка. Текст, настроение, до 4 фото или 1 видео, Муза, тема дня.
+ * Редактор поста: создание и правка. Текст, настроение, до 4 фото или 1 видео, Cosmos, тема дня.
  * Отправка — ⌘/Ctrl+Enter, вставка файлов — из буфера обмена или перетаскиванием.
  */
 export function PostEditor({ post, onDone, autoFocus }: { post?: PostDto; onDone?: () => void; autoFocus?: boolean }) {
@@ -119,8 +119,8 @@ export function PostEditor({ post, onDone, autoFocus }: { post?: PostDto; onDone
 
       <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-line pt-3">
         <AttachButton onFiles={upload.add} disabled={busy} />
-        <button type="button" onClick={() => setMuse((m) => !m)} className={cn("btn btn-ghost gap-1.5 px-3 text-saffron", muse && "bg-saffron-soft")} title="Муза — ИИ-соавтор">
-          <Sparkles size={17} /><span className="hidden sm:inline">Муза</span>
+        <button type="button" onClick={() => setMuse((m) => !m)} className={cn("btn btn-ghost gap-1.5 px-3 text-saffron", muse && "bg-saffron-soft")} title="Cosmos — ИИ-соавтор">
+          <Sparkles size={17} /><span className="hidden sm:inline">Cosmos</span>
         </button>
         <span className={cn("ml-auto text-xs tabular-nums", left < 0 ? "font-semibold text-rose" : left < 40 ? "text-saffron" : "text-muted")}>{left}</span>
         {post && <button type="button" onClick={onDone} className="btn btn-ghost px-3"><X size={16} /> Отмена</button>}

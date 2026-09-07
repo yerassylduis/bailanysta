@@ -1,7 +1,7 @@
 import { getProfile } from "@/lib/repo";
 import { avatarColor, ogCard } from "@/lib/og";
 
-export const alt = "Профиль в Bailanysta";
+export const alt = "Профиль в Expert Bailanysta";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 

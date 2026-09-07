@@ -126,7 +126,7 @@ export async function sendMessage(sender: User, handle: string, text: string, me
 
   // Бот отвечает сразу, в той же транзакции запроса: клиент увидит ответ при следующем опросе.
   if (peer.handle === BOT_HANDLE) {
-    const reply = text ? await botReply(text) : "Красиво! 📷 Я, правда, пока умею отвечать только на вопросы словами — спросите что-нибудь о Bailanysta.";
+    const reply = text ? await botReply(text) : "Красиво! 📷 Я, правда, пока умею отвечать только на вопросы словами — спросите что-нибудь о Expert Bailanysta.";
     const at = new Date(Date.now() + 1).toISOString();
     await db.insert(messages).values({ id: newId(), conversationId: conv.id, senderId: peer.id, text: reply, mediaId: null, createdAt: at });
     await db.update(conversations).set({ lastMessageAt: at }).where(eq(conversations.id, conv.id));

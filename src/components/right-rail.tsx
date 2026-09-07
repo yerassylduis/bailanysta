@@ -8,7 +8,7 @@ import { useMe, useSuggested, useTrending } from "@/hooks/use-data";
 import { Avatar, Skeleton } from "./ui";
 import { plural } from "@/lib/format";
 
-/** Правый рельс: поиск, тренды хэштегов, кого почитать, подсказка про Музу. */
+/** Правый рельс: поиск, тренды хэштегов, кого почитать, подсказка про Cosmos. */
 export function RightRail() {
   const router = useRouter();
   const [q, setQ] = useState("");
@@ -64,7 +64,7 @@ export function RightRail() {
 
       <section className="card relative overflow-hidden p-4">
         <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-saffron-soft blur-2xl" />
-        <h3 className="mb-1.5 flex items-center gap-2 font-display text-sm font-bold"><Sparkles size={16} className="text-saffron" /> Муза</h3>
+        <h3 className="mb-1.5 flex items-center gap-2 font-display text-sm font-bold"><Sparkles size={16} className="text-saffron" /> Cosmos</h3>
         <p className="text-sm text-muted">ИИ-соавтор: набросок в пост, полировка, хэштеги, перевод на қазақша. Кнопка ✨ в редакторе.</p>
         {!me?.user && <Link href="/login" className="btn btn-outline mt-3 w-full text-xs">Войти и попробовать</Link>}
       </section>
@@ -75,7 +75,7 @@ export function RightRail() {
           <span className="min-w-0 leading-tight"><span className="block text-sm font-semibold">Есть вопрос?</span><span className="block text-xs text-muted">Спросите помощника Көмекші</span></span>
         </Link>
       )}
-      <p className="px-2 text-[11px] leading-relaxed text-muted">Bailanysta · «байланыс» — связь. Сделано для nFactorial, 2026.</p>
+      <p className="px-2 text-[11px] leading-relaxed text-muted">Expert Bailanysta · «байланыс» — связь. Сделано для nFactorial, 2026.</p>
     </div>
   );
 }

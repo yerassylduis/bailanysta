@@ -39,7 +39,7 @@ export async function ogCard(children: ReactNode) {
           <div style={{ width: 40, height: 40, borderRadius: 999, border: "4px solid #4be0d6", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div style={{ width: 12, height: 12, borderRadius: 999, background: "#4be0d6" }} />
           </div>
-          Bailanysta
+          Expert Bailanysta
           <span style={{ color: "#9b98ab", fontSize: 22, fontWeight: 700, marginLeft: 8 }}>байланыс — это связь</span>
         </div>
         {children}

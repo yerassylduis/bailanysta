@@ -1,7 +1,7 @@
 import { sqliteTable, text, integer, primaryKey, index } from "drizzle-orm/sqlite-core";
 
 /**
- * Схема данных Bailanysta.
+ * Схема данных Expert Bailanysta.
  * Все даты хранятся как ISO-строки (UTC) — просто, читаемо, переносимо между SQLite и Turso.
  */
 

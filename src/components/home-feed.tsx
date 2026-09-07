@@ -36,9 +36,9 @@ export function HomeFeed() {
           <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-accent-soft blur-3xl" />
           <div className="absolute -bottom-12 right-24 h-40 w-40 rounded-full bg-saffron-soft blur-3xl" />
           <div className="relative">
-            <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-accent"><Logo size={18} /> Bailanysta</div>
+            <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-accent"><Logo size={18} /> Expert Bailanysta</div>
             <h1 className="font-display text-3xl font-bold leading-[1.1] sm:text-4xl">Байланыс —<br />это связь между людьми.</h1>
-            <p className="mt-3 max-w-md text-[15px] text-ink-2">Уютная сеть: посты с настроением, фото и видео, личные сообщения, созвездие подписок и ИИ-соавтор Муза. Без паролей — просто выберите ник.</p>
+            <p className="mt-3 max-w-md text-[15px] text-ink-2">Уютная сеть: посты с настроением, фото и видео, личные сообщения, созвездие подписок и ИИ-соавтор Cosmos. Без паролей — просто выберите ник.</p>
             <div className="mt-5 flex flex-wrap gap-2">
               <Link href="/login" className="btn btn-primary">Войти по нику <ArrowRight size={16} /></Link>
               <Link href="/explore" className="btn btn-outline">Смотреть созвездие</Link>

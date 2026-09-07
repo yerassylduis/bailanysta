@@ -69,7 +69,7 @@ export function PostCard({ post, detail }: { post: PostDto; detail?: boolean }) 
   };
   const share = async () => {
     const url = `${location.origin}/post/${shown.id}`;
-    if (navigator.share) { try { await navigator.share({ title: `${shown.author.name} в Bailanysta`, text: shown.text.slice(0, 120), url }); return; } catch {} }
+    if (navigator.share) { try { await navigator.share({ title: `${shown.author.name} в Expert Bailanysta`, text: shown.text.slice(0, 120), url }); return; } catch {} }
     try { await navigator.clipboard.writeText(url); toast("Ссылка скопирована", "success"); } catch { toast(url); }
   };
   const goTo = (e: React.MouseEvent) => { if (!detail && !(e.target as HTMLElement).closest("a,button,video")) router.push(`/post/${shown.id}`); };
