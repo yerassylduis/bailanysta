@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Send, ImagePlus, X, MessageCircleMore, Users, Plus, UserPlus, LogOut, Bot } from "lucide-react";
+import { ArrowLeft, Send, ImagePlus, X, MessageCircleMore, Users, Plus, UserPlus, LogOut, Bot, Video } from "lucide-react";
 import { useConversations, useCreateGroup, useGroupMessages, useMe, useMessages, useSendGroupMessage, useSendMessage } from "@/hooks/use-data";
 import { useUpload } from "@/hooks/use-upload";
 import { api } from "@/lib/api-client";
@@ -170,6 +170,11 @@ function MessageList({ items, pending, isPending, error, showAuthor, typing }: {
                 {showAuthor && !m.mine && !sameAuthor && <p className={cn("mb-0.5 text-[11px] font-semibold text-accent", m.media && "px-2 pt-1")}>{m.from.name}</p>}
                 {m.media && <MediaGrid media={[m.media]} className={cn("border-0", m.text && "mb-1.5")} />}
                 {m.text && (m.mine ? <p className={cn(m.media && "px-2 pb-1")} style={{ overflowWrap: "anywhere" }}>{m.text}</p> : <RichText text={m.text} className={cn(m.media && "px-2 pb-1")} />)}
+                {callLink(m.text) && (
+                  <Link href={callLink(m.text)!} className={cn("btn mt-2 w-full py-1.5 text-xs", m.mine ? "bg-white/20 text-accent-ink hover:bg-white/30" : "btn-primary")}>
+                    <Video size={14} /> Присоединиться к созвону
+                  </Link>
+                )}
               </div>
             </div>
           </div>
@@ -308,6 +313,12 @@ function CreateGroupDialog({ onClose }: { onClose: () => void }) {
       </div>
     </div>
   );
+}
+
+/** Ссылка на созвон внутри текста сообщения → относительный путь для кнопки. */
+function callLink(text: string): string | null {
+  const m = /\/calls\/([a-z0-9]{3}-[a-z0-9]{3}-[a-z0-9]{3})/i.exec(text);
+  return m ? `/calls/${m[1].toLowerCase()}` : null;
 }
 
 export type { ConversationDto };

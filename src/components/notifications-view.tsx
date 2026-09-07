@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import { Heart, MessageCircle, UserPlus, AtSign, CheckCheck, Repeat2, Quote, Reply, ThumbsUp } from "lucide-react";
+import { Heart, MessageCircle, UserPlus, AtSign, CheckCheck, Repeat2, Quote, Reply, ThumbsUp, Video } from "lucide-react";
 import { useMarkRead, useMe, useNotifications } from "@/hooks/use-data";
 import { Avatar, EmptyState, Skeleton } from "./ui";
 import { cn, timeAgo } from "@/lib/format";
@@ -17,6 +17,7 @@ const META: Record<NotificationDto["type"], { icon: React.ReactNode; text: strin
   quote: { icon: <Quote size={14} className="text-saffron" />, text: "процитировал(а) ваш пост" },
   reply: { icon: <Reply size={14} className="text-accent" />, text: "ответил(а) на ваш комментарий" },
   comment_like: { icon: <ThumbsUp size={14} className="text-rose" />, text: "оценил(а) ваш комментарий" },
+  call_invite: { icon: <Video size={14} className="text-accent" />, text: "приглашает вас в созвон" },
 };
 
 /** Уведомления: обновляются раз в 20 секунд; при открытии страницы отмечаются прочитанными. */
@@ -48,8 +49,8 @@ export function NotificationsView() {
       ) : (
         <ul className="space-y-2">
           {q.data.items.map((n) => {
-            const m = META[n.type];
-            const href = n.post ? `/post/${n.post.id}` : `/u/${n.actor.handle}`;
+            const m = META[n.type] ?? { icon: <AtSign size={14} />, text: "— новое событие" };
+            const href = n.link ?? (n.post ? `/post/${n.post.id}` : `/u/${n.actor.handle}`);
             return (
               <li key={n.id}>
                 <Link href={href} className={cn("card fade-in flex items-start gap-3 p-3.5 transition hover:border-line-strong", !n.read && "border-accent/40 bg-accent-soft/40")}>
@@ -57,6 +58,7 @@ export function NotificationsView() {
                   <div className="min-w-0 flex-1 text-sm">
                     <p><span className="font-semibold">{n.actor.name}</span> <span className="text-ink-2">{m.text}</span> <span className="text-xs text-muted">· {timeAgo(n.createdAt)}</span></p>
                     {n.post && <p className="mt-0.5 truncate text-muted">«{n.post.excerpt}»</p>}
+                    {n.type === "call_invite" && n.link && <span className="btn btn-primary mt-2 px-3 py-1 text-xs"><Video size={13} /> Присоединиться</span>}
                   </div>
                   {!n.read && <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-accent" />}
                 </Link>

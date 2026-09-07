@@ -17,11 +17,12 @@ const TEXT: Record<NotificationDto["type"], string> = {
   like: "оценил(а) ваш пост", comment: "ответил(а) на ваш пост", follow: "подписался(ась) на вас",
   mention: "упомянул(а) вас", repost: "репостнул(а) ваш пост", quote: "процитировал(а) ваш пост",
   reply: "ответил(а) на ваш комментарий", comment_like: "оценил(а) ваш комментарий",
+  call_invite: "приглашает вас в созвон",
 };
 
 type MeData = Awaited<ReturnType<typeof api.me>>;
 
-export function useRealtime(enabled: boolean, toast: (text: string, kind?: "info" | "success" | "error") => void) {
+export function useRealtime(enabled: boolean, toast: (text: string, kind?: "info" | "success" | "error", action?: { label: string; href?: string }) => void) {
   const qc = useQueryClient();
   const pathname = usePathname();
   const pathRef = useRef(pathname);
@@ -61,7 +62,10 @@ export function useRealtime(enabled: boolean, toast: (text: string, kind?: "info
       if (d.items.some((n) => n.type === "follow")) qc.invalidateQueries({ queryKey: ["profile"] });
       if (fresh(d.items.map((n) => n.id))) playNotify();
       if (!pathRef.current.startsWith("/notifications")) {
-        for (const n of d.items.slice(-3)) toast(`${n.actor.name} ${TEXT[n.type] ?? "— новое событие"}`, "success");
+        for (const n of d.items.slice(-3)) {
+          if (n.type === "call_invite" && n.link) toast(`📞 ${n.actor.name} приглашает вас в созвон`, "success", { label: "Присоединиться", href: n.link });
+          else toast(`${n.actor.name} ${TEXT[n.type] ?? "— новое событие"}`, "success");
+        }
       }
     });
 
@@ -76,7 +80,8 @@ export function useRealtime(enabled: boolean, toast: (text: string, kind?: "info
           if (!pathRef.current.startsWith(`/messages/g/${m.group.id}`)) toast(`👥 ${m.group.title} · ${m.from.name}: ${m.text.slice(0, 50)}`);
         } else {
           qc.invalidateQueries({ queryKey: keys.messages(m.from.handle) });
-          if (!pathRef.current.startsWith(`/messages/${m.from.handle}`)) toast(`💬 ${m.from.name}: ${m.text.slice(0, 60)}`);
+          const isInvite = /\/calls\/[a-z0-9-]+/.test(m.text);
+          if (!isInvite && !pathRef.current.startsWith(`/messages/${m.from.handle}`)) toast(`💬 ${m.from.name}: ${m.text.slice(0, 60)}`);
         }
       }
     });

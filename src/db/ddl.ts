@@ -67,6 +67,7 @@ export const DDL: string[] = [
     actor_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     type TEXT NOT NULL,
     post_id TEXT REFERENCES posts(id) ON DELETE CASCADE,
+    link TEXT,
     read INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
   )`,
@@ -163,6 +164,7 @@ export const SOFT_MIGRATIONS: string[] = [
   `ALTER TABLE users ADD COLUMN avatar_url TEXT`,
   `ALTER TABLE users ADD COLUMN cover TEXT`,
   `ALTER TABLE comments ADD COLUMN parent_id TEXT`,
+  `ALTER TABLE notifications ADD COLUMN link TEXT`,
   `ALTER TABLE conversations ADD COLUMN is_group INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE conversations ADD COLUMN title TEXT`,
   `ALTER TABLE conversations ADD COLUMN owner_id TEXT`,

@@ -17,7 +17,7 @@ import path from "node:path";
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 
 /** Поднимайте при изменении DDL/SOFT_MIGRATIONS: в dev это заставит переинициализировать кэш после hot-reload. */
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 type Cached = { client: Client; db: Db; ready: Promise<void>; version: number };
 const g = globalThis as unknown as { __bailanysta?: Cached };

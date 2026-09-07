@@ -220,8 +220,10 @@ export const notifications = sqliteTable(
     userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     /** Кто совершил действие */
     actorId: text("actor_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    type: text("type").notNull(), // like | comment | follow | mention
+    type: text("type").notNull(), // like | comment | follow | mention | repost | quote | reply | comment_like | call_invite
     postId: text("post_id").references(() => posts.id, { onDelete: "cascade" }),
+    /** Ссылка-действие (например, /calls/abc-def-ghk для приглашения в созвон) */
+    link: text("link"),
     read: integer("read").notNull().default(0),
     createdAt: text("created_at").notNull(),
   },

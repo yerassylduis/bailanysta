@@ -455,9 +455,9 @@ export async function setFollow(viewer: User, handle: string, follow: boolean) {
 
 /* ---------------------------- notifications ----------------------------- */
 
-async function pushNotification(n: { userId: string; actorId: string; type: NotificationDto["type"]; postId: string | null }) {
+export async function pushNotification(n: { userId: string; actorId: string; type: NotificationDto["type"]; postId: string | null; link?: string | null }) {
   const db = await getDb();
-  await db.insert(notifications).values({ id: newId(), ...n, read: 0, createdAt: nowIso() });
+  await db.insert(notifications).values({ id: newId(), userId: n.userId, actorId: n.actorId, type: n.type, postId: n.postId, link: n.link ?? null, read: 0, createdAt: nowIso() });
 }
 
 export async function listNotifications(userId: string, limit = 30): Promise<{ items: NotificationDto[]; unread: number }> {
@@ -474,7 +474,7 @@ export async function listNotifications(userId: string, limit = 30): Promise<{ i
     unread,
     items: rows.map(({ n, actor, postText }) => ({
       id: n.id, type: n.type as NotificationDto["type"], read: n.read === 1, createdAt: n.createdAt, actor: toUserDto(actor),
-      post: n.postId ? { id: n.postId, excerpt: (postText ?? "").slice(0, 80) } : null,
+      post: n.postId ? { id: n.postId, excerpt: (postText ?? "").slice(0, 80) } : null, link: n.link ?? null,
     })),
   };
 }
@@ -510,7 +510,7 @@ export async function notificationsSince(userId: string, sinceIso: string, limit
     .limit(limit);
   return rows.map(({ n, actor, postText }) => ({
     id: n.id, type: n.type as NotificationDto["type"], read: n.read === 1, createdAt: n.createdAt, actor: toUserDto(actor),
-    post: n.postId ? { id: n.postId, excerpt: (postText ?? "").slice(0, 80) } : null,
+    post: n.postId ? { id: n.postId, excerpt: (postText ?? "").slice(0, 80) } : null, link: n.link ?? null,
   }));
 }
 

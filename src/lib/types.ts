@@ -103,11 +103,13 @@ export type CommentDto = {
 
 export type NotificationDto = {
   id: string;
-  type: "like" | "comment" | "follow" | "mention" | "repost" | "quote" | "reply" | "comment_like";
+  type: "like" | "comment" | "follow" | "mention" | "repost" | "quote" | "reply" | "comment_like" | "call_invite";
   read: boolean;
   createdAt: string;
   actor: UserDto;
   post: { id: string; excerpt: string } | null;
+  /** Ссылка-действие: для call_invite — страница созвона */
+  link: string | null;
 };
 
 export type Page<T> = { items: T[]; nextCursor: string | null };
