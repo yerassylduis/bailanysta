@@ -541,18 +541,27 @@ export function useCallRoom(callId: string, me: UserDto | null) {
     setCamOff(next); signal("state", null, { camOff: next });
   }, [camOff, signal, enableDevice]);
 
-  /** Заменяем видеодорожку во всех соединениях (камера ↔ экран). */
+  /**
+   * Заменяем видеодорожку во всех соединениях (камера ↔ экран).
+   * Если вошли без камеры, видеоканал был «только приём» — переводим его в sendrecv и пересогласуем,
+   * иначе собеседники не получат экран.
+   */
   const swapVideoTrack = useCallback(async (track: MediaStreamTrack | null) => {
+    let need = false;
     for (const pc of pcs.current.values()) {
-      const tr = pc.getTransceivers().find((t) => t.receiver.track?.kind === "video" || t.sender.track?.kind === "video");
-      if (tr) await tr.sender.replaceTrack(track).catch((e) => console.warn("[call] replaceTrack", e));
+      const tr = pc.getTransceivers().find((t) => (t.receiver.track?.kind === "video" || t.sender.track?.kind === "video") && t.currentDirection !== "stopped");
+      if (tr) {
+        await tr.sender.replaceTrack(track).catch((e) => console.warn("[call] replaceTrack", e));
+        if (track && tr.direction !== "sendrecv") { tr.direction = "sendrecv"; need = true; }
+      } else if (track && localRef.current) { pc.addTrack(track, localRef.current); need = true; }
     }
     if (localRef.current) {
       localRef.current.getVideoTracks().forEach((t) => localRef.current!.removeTrack(t));
       if (track) localRef.current.addTrack(track);
       setLocal(new MediaStream(localRef.current.getTracks()));
     }
-  }, []);
+    if (need) await renegotiateAll();
+  }, [renegotiateAll]);
 
   const stopShare = useCallback(async () => {
     screenStream.current?.getTracks().forEach((t) => t.stop());
