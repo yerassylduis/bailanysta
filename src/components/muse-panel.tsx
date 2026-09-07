@@ -6,13 +6,15 @@ import { useMuse } from "@/hooks/use-data";
 import type { MuseMode } from "@/lib/types";
 import { cn } from "@/lib/format";
 import { Skeleton } from "./ui";
+import { useT } from "./locale-provider";
 
-const MODES: Array<{ id: MuseMode; label: string; icon: React.ReactNode; needsText: string }> = [
-  { id: "draft", label: "Набросок → пост", icon: <PenLine size={14} />, needsText: "Напишите тему или пару слов — Cosmos развернёт их в пост." },
-  { id: "polish", label: "Отполировать", icon: <Wand2 size={14} />, needsText: "Вставьте текст, который хотите улучшить." },
-  { id: "hashtags", label: "Хэштеги", icon: <Hash size={14} />, needsText: "Нужен текст поста, чтобы подобрать теги." },
-  { id: "translate", label: "Перевести", icon: <Languages size={14} />, needsText: "Нужен текст для перевода." },
-  { id: "caption", label: "Подпись к медиа", icon: <ImageIcon size={14} />, needsText: "Опишите фото или видео парой слов — Cosmos придумает подпись." },
+/** Режимы Cosmos; название — `muse.mode.<id>`, подсказка без текста — `muse.needs.<id>`. */
+const MODES: Array<{ id: MuseMode; icon: React.ReactNode }> = [
+  { id: "draft", icon: <PenLine size={14} /> },
+  { id: "polish", icon: <Wand2 size={14} /> },
+  { id: "hashtags", icon: <Hash size={14} /> },
+  { id: "translate", icon: <Languages size={14} /> },
+  { id: "caption", icon: <ImageIcon size={14} /> },
 ];
 
 /** Панель Cosmos внутри редактора: режимы, варианты, вставка одним кликом. */
@@ -20,6 +22,7 @@ export function MusePanel({ text, onPick, onClose, hasMedia }: { text: string; o
   const [mode, setMode] = useState<MuseMode>(hasMedia ? "caption" : "draft");
   const [lang, setLang] = useState<"kk" | "ru" | "en">("kk");
   const muse = useMuse();
+  const { t } = useT();
   const ready = text.trim().length > 0;
 
   const run = () => { if (ready) muse.mutate({ mode, text: text.trim(), lang: mode === "translate" ? lang : undefined }); };
@@ -29,12 +32,12 @@ export function MusePanel({ text, onPick, onClose, hasMedia }: { text: string; o
       <div className="flex items-center gap-2">
         <Sparkles size={15} className="text-saffron" />
         <span className="text-sm font-semibold">Cosmos</span>
-        <span className="text-xs text-muted">· ИИ-соавтор</span>
-        <button onClick={onClose} className="btn btn-ghost ml-auto h-7 w-7 p-0" aria-label="Закрыть"><X size={14} /></button>
+        <span className="text-xs text-muted">{t("muse.subtitle")}</span>
+        <button onClick={onClose} className="btn btn-ghost ml-auto h-7 w-7 p-0" aria-label={t("common.close")}><X size={14} /></button>
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {MODES.map((m) => (
-          <button key={m.id} onClick={() => setMode(m.id)} className={cn("chip", mode === m.id && "chip-active")}>{m.icon}{m.label}</button>
+          <button key={m.id} onClick={() => setMode(m.id)} className={cn("chip", mode === m.id && "chip-active")}>{m.icon}{t(`muse.mode.${m.id}`)}</button>
         ))}
         {mode === "translate" && (
           <div className="ml-1 flex gap-1">
@@ -46,9 +49,9 @@ export function MusePanel({ text, onPick, onClose, hasMedia }: { text: string; o
       </div>
       <div className="mt-2.5 flex items-center gap-2">
         <button onClick={run} disabled={!ready || muse.isPending} className="btn btn-primary px-3 py-1.5 text-xs" style={{ background: "var(--saffron)", color: "#1d1a16" }}>
-          {muse.isPending ? "Cosmos думает…" : "Предложить варианты"}
+          {muse.isPending ? t("muse.thinking") : t("muse.suggest")}
         </button>
-        {!ready && <span className="text-xs text-muted">{MODES.find((m) => m.id === mode)?.needsText}</span>}
+        {!ready && <span className="text-xs text-muted">{t(`muse.needs.${mode}`)}</span>}
       </div>
 
       {muse.isPending && <div className="mt-3 space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-12 w-full" />)}</div>}
@@ -62,7 +65,7 @@ export function MusePanel({ text, onPick, onClose, hasMedia }: { text: string; o
             </button>
           ))}
           <p className="text-[11px] text-muted">
-            {muse.data.source === "claude" ? "Сгенерировано Claude · вызов идёт с сервера" : `Офлайн-режим · ${muse.data.note}. Чтобы включить настоящий ИИ, добавьте ANTHROPIC_API_KEY в .env.local и перезапустите сервер.`}
+            {muse.data.source === "claude" ? t("muse.byClaude") : t("muse.offline", { note: muse.data.note })}
           </p>
         </div>
       )}

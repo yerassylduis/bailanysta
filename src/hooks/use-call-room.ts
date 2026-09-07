@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api-client";
+import { INTL_TAG, currentLocale, translate } from "@/lib/i18n";
 import type { CallDto, SignalDto, UserDto } from "@/lib/types";
+
+/** Надпись интерфейса в текущей локали (хук — не React-компонент, поэтому без useT). */
+const tr = (key: string) => translate(currentLocale(), key);
 
 /**
  * Комната звонка на WebRTC (mesh: каждый с каждым).
@@ -67,7 +71,8 @@ export function useCallRoom(callId: string, me: UserDto | null) {
     try {
       const a = new Audio("/sounds/notify.wav"); a.volume = 0.8; a.play().catch(() => {});
       if ("speechSynthesis" in window) {
-        const u = new SpeechSynthesisUtterance("Идёт запись звонка"); u.lang = "ru-RU"; u.rate = 1.05;
+        const loc = currentLocale();
+        const u = new SpeechSynthesisUtterance(translate(loc, "calls.recordingSpeech")); u.lang = loc === "en" ? "en-US" : INTL_TAG[loc]; u.rate = 1.05;
         setTimeout(() => window.speechSynthesis.speak(u), 350);
       }
     } catch {}
@@ -262,7 +267,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
   useEffect(() => {
     let alive = true;
     api.call(callId).then((r) => { if (alive) { setCall(r.call); setChat(r.chat.map((h) => ({ id: h.id, from: h.from, text: (h.payload as { text: string }).text, at: h.createdAt }))); } })
-      .catch((e) => { if (alive) setError(e instanceof Error ? e.message : "Звонок не найден"); });
+      .catch((e) => { if (alive) setError(e instanceof Error ? e.message : tr("calls.callNotFound")); });
     return () => { alive = false; };
   }, [callId]);
 
@@ -295,7 +300,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
         : await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" } });
       track = s.getTracks()[0];
     } catch (e) {
-      setError(kind === "audio" ? "Микрофон недоступен или доступ запрещён" : "Камера недоступна или доступ запрещён");
+      setError(kind === "audio" ? tr("calls.micUnavailable") : tr("calls.camUnavailable"));
       console.warn("[call] getUserMedia", kind, e);
       return false;
     }
@@ -360,7 +365,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
       // «Привет» всем: если чей-то join потерялся, инициатор увидит нас и пришлёт offer
       await signal("state", null, { hello: true, ...stateRef.current });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось войти в звонок. Разрешите доступ к камере и микрофону.");
+      setError(e instanceof Error ? e.message : tr("calls.joinFailed"));
     }
   }, [callId, me, makeOffer, onSignal, signal, prepare]);
 
@@ -423,7 +428,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
    * и рывков от таймера. Страховочный таймер держит поток живым, если источник замер или вкладка в фоне.
    */
   const startRecording = useCallback(() => {
-    if (typeof MediaRecorder === "undefined") { setError("Этот браузер не поддерживает запись (MediaRecorder)"); return; }
+    if (typeof MediaRecorder === "undefined") { setError(tr("calls.noMediaRecorder")); return; }
     const W = 1280, H = 720, STRIP = 150;
     const canvas = document.createElement("canvas");
     canvas.width = W; canvas.height = H;
@@ -444,7 +449,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
       if (share) {
         const cams = vs.filter((v) => v !== share);
         const mainH = cams.length ? H - STRIP : H;
-        fit(share, 0, 0, W, mainH); label(`${share.dataset.callTile} · экран`, 0, mainH, W);
+        fit(share, 0, 0, W, mainH); label(`${share.dataset.callTile} · ${tr("calls.screen")}`, 0, mainH, W);
         if (cams.length) {
           const cw = Math.min(200, (W - 16) / cams.length), ch = STRIP - 16;
           cams.forEach((v, i) => { const x = 8 + i * cw; fit(v, x, mainH + 8, cw - 8, ch); label(v.dataset.callTile ?? "", x, mainH + 8 + ch, cw - 8); });
@@ -504,7 +509,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
     recorder.current = rec;
     setRecordingUrl(null); setRecording(true);
     signal("state", null, { recording: true });
-    announceRecording(meRef.current?.name ?? "Вы");
+    announceRecording(meRef.current?.name ?? tr("calls.youCap"));
   }, [callId, signal]);
 
   const stopResolve = useRef<(() => void) | null>(null);
@@ -612,6 +617,6 @@ export function useCallRoom(callId: string, me: UserDto | null) {
 
   const onRecording = useCallback((cb: (by: string) => void) => { onRecordingRef.current = cb; }, []);
   const anyoneRecording = recording || Object.values(peers).some((p) => p.recording);
-  const recordingBy = recording ? (me?.name ?? "Вы") : Object.values(peers).find((p) => p.recording)?.user.name ?? null;
+  const recordingBy = recording ? (me?.name ?? tr("calls.youCap")) : Object.values(peers).find((p) => p.recording)?.user.name ?? null;
   return { call, joined, error, local, peers, chat, stats, muted, camOff, sharing, recording, recordingUrl, recordingExt, anyoneRecording, recordingBy, onRecording, prepare, enableDevice, join, leave, toggleMute, toggleCam, startShare, stopShare, sendChat, startRecording, stopRecording };
 }

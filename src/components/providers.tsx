@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createContext, useCallback, useContext, useMemo, useState, useSyncExternalStore } from "react";
 import { THEME_COOKIE, THEME_KEY, type Theme } from "@/lib/theme";
 import { ToastProvider } from "./toast";
+import { LocaleProvider } from "./locale-provider";
+import type { Locale } from "@/lib/i18n";
 
 /* ------------------------------- Тема ----------------------------------- */
 
@@ -41,14 +43,16 @@ export function useTheme() {
 
 /* ------------------------------ Провайдеры ------------------------------ */
 
-export function Providers({ initialTheme, children }: { initialTheme: Theme | null; children: React.ReactNode }) {
+export function Providers({ initialTheme, initialLocale, children }: { initialTheme: Theme | null; initialLocale: Locale; children: React.ReactNode }) {
   const [client] = useState(() => new QueryClient({
     defaultOptions: { queries: { staleTime: 15_000, retry: 1, refetchOnWindowFocus: false } },
   }));
   return (
     <QueryClientProvider client={client}>
       <ThemeProvider initialTheme={initialTheme}>
-        <ToastProvider>{children}</ToastProvider>
+        <LocaleProvider initialLocale={initialLocale}>
+          <ToastProvider>{children}</ToastProvider>
+        </LocaleProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

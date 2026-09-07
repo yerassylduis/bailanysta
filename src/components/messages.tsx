@@ -12,7 +12,8 @@ import { Avatar, EmptyState, Skeleton } from "./ui";
 import { RichText } from "./rich-text";
 import { MediaGrid } from "./media";
 import { useToast } from "./toast";
-import { cn, timeAgo } from "@/lib/format";
+import { cn, fmtDateTime, timeAgo } from "@/lib/format";
+import { useT } from "./locale-provider";
 import { BOT_HANDLE, QUICK_QUESTIONS } from "@/lib/bot";
 import type { ConversationDto, MessageDto, UserDto } from "@/lib/types";
 
@@ -22,17 +23,18 @@ import type { ConversationDto, MessageDto, UserDto } from "@/lib/types";
  */
 export function MessagesView({ handle, groupId }: { handle?: string; groupId?: string }) {
   const { data: me, isPending } = useMe();
+  const { t } = useT();
   const [creating, setCreating] = useState(false);
   const open = !!handle || !!groupId;
   if (!isPending && !me?.user) {
-    return <EmptyState title="Сообщения только для своих" text="Войдите, чтобы переписываться с людьми из созвездия." action={<Link href="/login" className="btn btn-primary">Войти</Link>} />;
+    return <EmptyState title={t("messages.onlyForOwn")} text={t("messages.loginText")} action={<Link href="/login" className="btn btn-primary">{t("nav.login")}</Link>} />;
   }
   return (
     <div className={cn("card flex min-h-[420px] overflow-hidden md:h-[calc(100dvh-3.5rem)]", open ? "h-[calc(100dvh-1.5rem)]" : "h-[calc(100dvh-9.5rem)]")}>
       <aside className={cn("w-full shrink-0 flex-col border-r border-line md:flex md:w-72 lg:w-80", open ? "hidden" : "flex")}>
         <header className="flex items-center justify-between px-4 py-3">
-          <h1 className="font-display text-lg font-bold">Сообщения</h1>
-          <button onClick={() => setCreating(true)} className="btn btn-outline gap-1.5 px-3 py-1.5 text-xs" title="Новая группа"><Users size={14} /> Группа</button>
+          <h1 className="font-display text-lg font-bold">{t("nav.messages")}</h1>
+          <button onClick={() => setCreating(true)} className="btn btn-outline gap-1.5 px-3 py-1.5 text-xs" title={t("messages.newGroup")}><Users size={14} /> {t("messages.group")}</button>
         </header>
         <ConversationList activeHandle={handle} activeGroup={groupId} />
       </aside>
@@ -40,8 +42,8 @@ export function MessagesView({ handle, groupId }: { handle?: string; groupId?: s
         {handle ? <DmThread handle={handle} /> : groupId ? <GroupThread id={groupId} /> : (
           <div className="flex flex-1 flex-col items-center justify-center p-8 text-center text-muted">
             <MessageCircleMore size={36} className="mb-3 text-accent" />
-            <p className="font-semibold text-ink">Выберите диалог</p>
-            <p className="mt-1 text-sm">напишите кому-нибудь со страницы профиля или <button onClick={() => setCreating(true)} className="link-tag">создайте группу</button>.</p>
+            <p className="font-semibold text-ink">{t("messages.pickDialog")}</p>
+            <p className="mt-1 text-sm">{t("messages.pickHint.before")}<button onClick={() => setCreating(true)} className="link-tag">{t("messages.pickHint.link")}</button>{t("messages.pickHint.after")}</p>
           </div>
         )}
       </section>
@@ -53,15 +55,16 @@ export function MessagesView({ handle, groupId }: { handle?: string; groupId?: s
 /* ------------------------------ список ---------------------------------- */
 
 function ConversationList({ activeHandle, activeGroup }: { activeHandle?: string; activeGroup?: string }) {
+  const { t, locale } = useT();
   const q = useConversations(true);
   if (q.isPending) return <div className="space-y-2 p-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 w-full rounded-xl!" />)}</div>;
-  if (!q.data?.items.length) return <p className="p-4 text-sm text-muted">Пока ни одного диалога. Откройте профиль человека и нажмите «Написать» или создайте группу.</p>;
+  if (!q.data?.items.length) return <p className="p-4 text-sm text-muted">{t("messages.noDialogs")}</p>;
   return (
     <ul className="flex-1 overflow-y-auto p-2">
       {q.data.items.map((c) => {
         const href = c.kind === "group" ? `/messages/g/${c.id}` : `/messages/${c.peer!.handle}`;
         const active = c.kind === "group" ? activeGroup === c.id : activeHandle === c.peer?.handle;
-        const last = c.lastMessage ? `${c.lastMessage.mine ? "Вы" : c.kind === "group" ? c.lastMessage.fromName ?? "" : ""}${c.lastMessage.mine || c.kind === "group" ? ": " : ""}${c.lastMessage.text || (c.lastMessage.hasMedia ? "📎 Медиа" : "")}` : "Нет сообщений";
+        const last = c.lastMessage ? `${c.lastMessage.mine ? t("messages.you") : c.kind === "group" ? c.lastMessage.fromName ?? "" : ""}${c.lastMessage.mine || c.kind === "group" ? ": " : ""}${c.lastMessage.text || (c.lastMessage.hasMedia ? t("messages.mediaAttachment") : "")}` : t("messages.noMessages");
         return (
           <li key={c.id}>
             <Link href={href} className={cn("flex items-center gap-3 rounded-xl p-2.5 transition hover:bg-bg-2", active && "bg-accent-soft")}>
@@ -69,7 +72,7 @@ function ConversationList({ activeHandle, activeGroup }: { activeHandle?: string
               <span className="min-w-0 flex-1 leading-tight">
                 <span className="flex items-baseline justify-between gap-2">
                   <span className="truncate text-sm font-semibold">{c.kind === "group" ? c.title : c.peer!.name}</span>
-                  {c.lastMessage && <span className="shrink-0 text-[11px] text-muted">{timeAgo(c.lastMessage.createdAt)}</span>}
+                  {c.lastMessage && <span className="shrink-0 text-[11px] text-muted">{timeAgo(c.lastMessage.createdAt, locale)}</span>}
                 </span>
                 <span className={cn("block truncate text-xs", c.unread ? "font-semibold text-ink" : "text-muted")}>{last}</span>
               </span>
@@ -102,13 +105,14 @@ function GroupAvatar({ members, size = 44 }: { members: UserDto[]; size?: number
 function Composer({ onSend, pending, isBot, onQuick }: { onSend: (body: { text?: string; mediaId?: string }) => Promise<unknown>; pending: boolean; isBot?: boolean; onQuick?: (q: string) => void }) {
   const upload = useUpload({ images: 1, videos: 1 });
   const toast = useToast();
+  const { t } = useT();
   const [text, setText] = useState("");
   const submit = async () => {
-    const t = text.trim();
+    const body = text.trim();
     const mediaId = upload.mediaIds[0];
-    if ((!t && !mediaId) || pending || upload.uploading) return;
-    try { await onSend({ text: t || undefined, mediaId }); setText(""); upload.reset(); }
-    catch (e) { toast(e instanceof Error ? e.message : "Не отправилось", "error"); }
+    if ((!body && !mediaId) || pending || upload.uploading) return;
+    try { await onSend({ text: body || undefined, mediaId }); setText(""); upload.reset(); }
+    catch (e) { toast(e instanceof Error ? e.message : t("messages.sendFailed"), "error"); }
   };
   return (
     <div className="border-t border-line p-2.5 pb-safe">
@@ -133,15 +137,15 @@ function Composer({ onSend, pending, isBot, onQuick }: { onSend: (body: { text?:
         </div>
       )}
       <div className="flex items-end gap-1.5">
-        <label className="btn btn-ghost btn-icon shrink-0 cursor-pointer text-accent" title="Фото или видео">
+        <label className="btn btn-ghost btn-icon shrink-0 cursor-pointer text-accent" title={t("messages.attach")}>
           <ImagePlus size={20} />
           <input type="file" accept="image/*,video/*" className="hidden" onChange={(e) => { if (e.target.files?.length) upload.add(e.target.files); e.target.value = ""; }} />
         </label>
-        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={1} placeholder="Сообщение…"
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={1} placeholder={t("messages.placeholder")}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
           onPaste={(e) => { const f = Array.from(e.clipboardData.files ?? []); if (f.length) { e.preventDefault(); upload.add(f); } }}
           className="input max-h-32 min-h-10 flex-1 resize-none py-2.5" />
-        <button onClick={submit} disabled={(!text.trim() && !upload.mediaIds.length) || pending || upload.uploading} className="btn btn-primary btn-icon shrink-0" aria-label="Отправить"><Send size={18} /></button>
+        <button onClick={submit} disabled={(!text.trim() && !upload.mediaIds.length) || pending || upload.uploading} className="btn btn-primary btn-icon shrink-0" aria-label={t("common.send")}><Send size={18} /></button>
       </div>
     </div>
   );
@@ -150,20 +154,21 @@ function Composer({ onSend, pending, isBot, onQuick }: { onSend: (body: { text?:
 /* ------------------------------ сообщения -------------------------------- */
 
 function MessageList({ items, pending, isPending, error, showAuthor, typing }: { items: MessageDto[]; pending?: boolean; isPending: boolean; error?: string; showAuthor?: boolean; typing?: string }) {
+  const { t, locale } = useT();
   const bottom = useRef<HTMLDivElement>(null);
   useEffect(() => { bottom.current?.scrollIntoView({ block: "end" }); }, [items.length]);
   return (
     <div className="flex-1 space-y-2 overflow-y-auto px-3 py-4">
       {isPending && <div className="space-y-3">{[0, 1, 2].map((i) => <Skeleton key={i} className={cn("h-10 w-2/3 rounded-2xl!", i % 2 === 1 && "ml-auto")} />)}</div>}
       {error && <p className="text-center text-sm text-rose">{error}</p>}
-      {!isPending && !items.length && <p className="py-10 text-center text-sm text-muted">Начните разговор — напишите первым. Можно прикрепить фото или видео.</p>}
+      {!isPending && !items.length && <p className="py-10 text-center text-sm text-muted">{t("messages.startConversation")}</p>}
       {items.map((m, i) => {
         const prev = items[i - 1];
         const showTime = !prev || new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() > 10 * 60_000;
         const sameAuthor = prev && prev.from.id === m.from.id && !showTime;
         return (
           <div key={m.id}>
-            {showTime && <p className="my-3 text-center text-[11px] text-muted">{new Date(m.createdAt).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>}
+            {showTime && <p className="my-3 text-center text-[11px] text-muted">{fmtDateTime(m.createdAt, locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>}
             <div className={cn("flex items-end gap-2", m.mine ? "justify-end" : "justify-start")}>
               {showAuthor && !m.mine && (sameAuthor ? <span className="w-7" /> : <Link href={`/u/${m.from.handle}`}><Avatar user={m.from} size={28} /></Link>)}
               <div className={cn("max-w-[82%] rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed shadow-sm sm:max-w-[70%]", m.media && "w-72 max-w-[82%] p-1.5", m.mine ? "rounded-br-md bg-accent text-accent-ink" : "rounded-bl-md bg-bg-2 text-ink")}>
@@ -172,7 +177,7 @@ function MessageList({ items, pending, isPending, error, showAuthor, typing }: {
                 {m.text && (m.mine ? <p className={cn(m.media && "px-2 pb-1")} style={{ overflowWrap: "anywhere" }}>{m.text}</p> : <RichText text={m.text} className={cn(m.media && "px-2 pb-1")} />)}
                 {callLink(m.text) && (
                   <Link href={callLink(m.text)!} className={cn("btn mt-2 w-full py-1.5 text-xs", m.mine ? "bg-white/20 text-accent-ink hover:bg-white/30" : "btn-primary")}>
-                    <Video size={14} /> Присоединиться к созвону
+                    <Video size={14} /> {t("messages.joinCall")}
                   </Link>
                 )}
               </div>
@@ -192,21 +197,22 @@ function DmThread({ handle }: { handle: string }) {
   const q = useMessages(handle, true);
   const send = useSendMessage(handle);
   const isBot = q.data?.peer.handle === BOT_HANDLE;
+  const { t } = useT();
   return (
     <>
       <header className="flex items-center gap-3 border-b border-line px-3 py-2.5">
-        <Link href="/messages" className="btn btn-ghost btn-icon h-9 w-9 md:hidden" aria-label="Назад"><ArrowLeft size={18} /></Link>
+        <Link href="/messages" className="btn btn-ghost btn-icon h-9 w-9 md:hidden" aria-label={t("common.back")}><ArrowLeft size={18} /></Link>
         {q.data ? (
           <Link href={`/u/${q.data.peer.handle}`} className="flex min-w-0 items-center gap-2.5">
             <Avatar user={q.data.peer} size={36} />
             <span className="min-w-0 leading-tight">
-              <span className="flex items-center gap-1.5 truncate text-sm font-semibold">{q.data.peer.name}{isBot && <span className="chip py-0 text-[10px] text-accent"><Bot size={11} /> бот</span>}</span>
-              <span className="block text-xs text-muted">{isBot ? "отвечает мгновенно" : `@${q.data.peer.handle}`}</span>
+              <span className="flex items-center gap-1.5 truncate text-sm font-semibold">{q.data.peer.name}{isBot && <span className="chip py-0 text-[10px] text-accent"><Bot size={11} /> {t("messages.bot")}</span>}</span>
+              <span className="block text-xs text-muted">{isBot ? t("messages.botReplies") : `@${q.data.peer.handle}`}</span>
             </span>
           </Link>
         ) : <Skeleton className="h-9 w-40" />}
       </header>
-      <MessageList items={q.data?.items ?? []} isPending={q.isPending} error={q.error?.message} pending={send.isPending} typing={isBot ? "Көмекші печатает…" : undefined} />
+      <MessageList items={q.data?.items ?? []} isPending={q.isPending} error={q.error?.message} pending={send.isPending} typing={isBot ? t("messages.botTyping") : undefined} />
       <Composer onSend={(b) => send.mutateAsync(b)} pending={send.isPending} isBot={isBot} onQuick={(text) => send.mutateAsync({ text })} />
     </>
   );
@@ -220,6 +226,7 @@ function GroupThread({ id }: { id: string }) {
   const qc = useQueryClient();
   const router = useRouter();
   const toast = useToast();
+  const { t } = useT();
   const [adding, setAdding] = useState(false);
   const [handle, setHandle] = useState("");
   const conv = q.data?.conversation;
@@ -227,36 +234,36 @@ function GroupThread({ id }: { id: string }) {
   const addMember = async () => {
     const h = handle.trim().replace(/^@/, "").toLowerCase();
     if (!h) return;
-    try { await api.addGroupMember(id, h); setHandle(""); setAdding(false); qc.invalidateQueries({ queryKey: ["group-messages", id] }); qc.invalidateQueries({ queryKey: ["conversations"] }); toast("Участник добавлен", "success"); }
-    catch (e) { toast(e instanceof Error ? e.message : "Ошибка", "error"); }
+    try { await api.addGroupMember(id, h); setHandle(""); setAdding(false); qc.invalidateQueries({ queryKey: ["group-messages", id] }); qc.invalidateQueries({ queryKey: ["conversations"] }); toast(t("messages.memberAdded"), "success"); }
+    catch (e) { toast(e instanceof Error ? e.message : t("messages.error"), "error"); }
   };
   const leave = async () => {
-    if (!confirm("Покинуть группу?")) return;
+    if (!confirm(t("messages.leaveConfirm"))) return;
     try { await api.leaveGroup(id); qc.invalidateQueries({ queryKey: ["conversations"] }); router.push("/messages"); }
-    catch (e) { toast(e instanceof Error ? e.message : "Ошибка", "error"); }
+    catch (e) { toast(e instanceof Error ? e.message : t("messages.error"), "error"); }
   };
 
   return (
     <>
       <header className="flex items-center gap-3 border-b border-line px-3 py-2.5">
-        <Link href="/messages" className="btn btn-ghost btn-icon h-9 w-9 md:hidden" aria-label="Назад"><ArrowLeft size={18} /></Link>
+        <Link href="/messages" className="btn btn-ghost btn-icon h-9 w-9 md:hidden" aria-label={t("common.back")}><ArrowLeft size={18} /></Link>
         {conv ? (
           <>
             <GroupAvatar members={conv.members} size={38} />
             <span className="min-w-0 flex-1 leading-tight">
               <span className="block truncate text-sm font-semibold">{conv.title}</span>
-              <span className="block truncate text-xs text-muted">{conv.members.length} участников · {conv.members.map((m) => m.name.split(/\s+/)[0]).join(", ")}</span>
+              <span className="block truncate text-xs text-muted">{t("messages.members", { count: conv.members.length })} · {conv.members.map((m) => m.name.split(/\s+/)[0]).join(", ")}</span>
             </span>
-            <button onClick={() => setAdding((a) => !a)} className="btn btn-ghost btn-icon h-9 w-9" title="Добавить участника"><UserPlus size={17} /></button>
-            <button onClick={leave} className="btn btn-ghost btn-icon h-9 w-9 text-rose" title="Покинуть группу"><LogOut size={17} /></button>
+            <button onClick={() => setAdding((a) => !a)} className="btn btn-ghost btn-icon h-9 w-9" title={t("messages.addMember")}><UserPlus size={17} /></button>
+            <button onClick={leave} className="btn btn-ghost btn-icon h-9 w-9 text-rose" title={t("messages.leaveGroup")}><LogOut size={17} /></button>
           </>
         ) : <Skeleton className="h-9 w-40" />}
       </header>
       {adding && (
         <div className="flex items-center gap-2 border-b border-line bg-bg-2/60 px-3 py-2">
           <span className="text-muted">@</span>
-          <input value={handle} onChange={(e) => setHandle(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addMember(); }} placeholder="ник участника" className="input py-1.5" autoFocus />
-          <button onClick={addMember} className="btn btn-primary px-3 py-1.5 text-xs"><Plus size={14} /> Добавить</button>
+          <input value={handle} onChange={(e) => setHandle(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addMember(); }} placeholder={t("messages.handlePlaceholder")} className="input py-1.5" autoFocus />
+          <button onClick={addMember} className="btn btn-primary px-3 py-1.5 text-xs"><Plus size={14} /> {t("common.add")}</button>
         </div>
       )}
       <MessageList items={q.data?.items ?? []} isPending={q.isPending} error={q.error?.message} showAuthor />
@@ -271,6 +278,7 @@ function CreateGroupDialog({ onClose }: { onClose: () => void }) {
   const create = useCreateGroup();
   const router = useRouter();
   const toast = useToast();
+  const { t } = useT();
   const [title, setTitle] = useState("");
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<UserDto[]>([]);
@@ -282,17 +290,17 @@ function CreateGroupDialog({ onClose }: { onClose: () => void }) {
     if (!title.trim() || !picked.length) return;
     try {
       const g = await create.mutateAsync({ title: title.trim(), handles: picked.map((u) => u.handle) });
-      toast("Группа создана", "success"); onClose(); router.push(`/messages/g/${g.id}`);
-    } catch (e) { toast(e instanceof Error ? e.message : "Ошибка", "error"); }
+      toast(t("messages.groupCreated"), "success"); onClose(); router.push(`/messages/g/${g.id}`);
+    } catch (e) { toast(e instanceof Error ? e.message : t("messages.error"), "error"); }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
-      <div className="card fade-in w-full max-w-md rounded-b-none p-5 sm:rounded-b-xl2" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Новая группа">
-        <div className="mb-3 flex items-center justify-between"><h3 className="flex items-center gap-2 font-display text-base font-bold"><Users size={18} className="text-accent" /> Новая группа</h3><button onClick={onClose} className="btn btn-ghost btn-icon h-8 w-8"><X size={16} /></button></div>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Название группы" className="input" maxLength={60} autoFocus />
+      <div className="card fade-in w-full max-w-md rounded-b-none p-5 sm:rounded-b-xl2" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t("messages.newGroup")}>
+        <div className="mb-3 flex items-center justify-between"><h3 className="flex items-center gap-2 font-display text-base font-bold"><Users size={18} className="text-accent" /> {t("messages.newGroup")}</h3><button onClick={onClose} className="btn btn-ghost btn-icon h-8 w-8"><X size={16} /></button></div>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("messages.groupTitlePlaceholder")} className="input" maxLength={60} autoFocus />
         <div className="mt-3">
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Найти участника по нику или имени…" className="input" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("messages.searchMember")} className="input" />
           {found.length > 0 && (
             <ul className="card mt-1 max-h-40 overflow-y-auto p-1">
               {found.filter((u) => !picked.some((p) => p.id === u.id)).map((u) => (
@@ -307,8 +315,8 @@ function CreateGroupDialog({ onClose }: { onClose: () => void }) {
           )}
         </div>
         <div className="mt-4 flex justify-end gap-2">
-          <button onClick={onClose} className="btn btn-ghost">Отмена</button>
-          <button onClick={submit} disabled={!title.trim() || !picked.length || create.isPending} className="btn btn-primary"><Plus size={16} /> Создать</button>
+          <button onClick={onClose} className="btn btn-ghost">{t("common.cancel")}</button>
+          <button onClick={submit} disabled={!title.trim() || !picked.length || create.isPending} className="btn btn-primary"><Plus size={16} /> {t("common.create")}</button>
         </div>
       </div>
     </div>

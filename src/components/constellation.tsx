@@ -8,6 +8,7 @@ import { api } from "@/lib/api-client";
 import type { GalaxyDto, GalaxyLinkDto, GraphDto } from "@/lib/types";
 import { Skeleton } from "./ui";
 import { cn } from "@/lib/format";
+import { useT } from "./locale-provider";
 
 /**
  * «Шоқжұлдыз» — созвездие связей как карта галактик.
@@ -28,8 +29,9 @@ const FULL: View = { x: 0, y: 0, w: W, h: H };
 export function Constellation() {
   const graph = useGraph();
   const { data: me } = useMe();
+  const { t } = useT();
   if (graph.isPending) return <Skeleton className="aspect-[16/10] w-full rounded-2xl!" />;
-  if (graph.isError || !graph.data) return <p className="text-sm text-muted">Не удалось загрузить созвездие.</p>;
+  if (graph.isError || !graph.data) return <p className="text-sm text-muted">{t("explore.loadFailed")}</p>;
   return <Sky graph={graph.data} meId={me?.user?.id ?? null} meAdmin={me?.user?.isAdmin ?? false} />;
 }
 
@@ -49,13 +51,13 @@ function clusterCenters(n: number): Array<[number, number]> {
   return out;
 }
 
-function buildClusters(graph: GraphDto): Cluster[] {
+function buildClusters(graph: GraphDto, lonersLabel: string): Cluster[] {
   const gal = [...graph.galaxies].sort((a, b) => b.members - a.members || a.name.localeCompare(b.name));
   const list: Array<Omit<Cluster, "cx" | "cy">> = gal.map((g, i) => ({
     id: g.id, galaxy: g, members: graph.nodes.filter((n) => n.galaxyId === g.id).map((n) => n.id), label: g.name, hue: HUES[i % HUES.length],
   }));
   const loners = graph.nodes.filter((n) => !n.galaxyId || !graph.galaxies.some((g) => g.id === n.galaxyId)).map((n) => n.id);
-  if (loners.length) list.push({ id: LONERS, galaxy: null, members: loners, label: "Новые звёзды", hue: HUES[2] });
+  if (loners.length) list.push({ id: LONERS, galaxy: null, members: loners, label: lonersLabel, hue: HUES[2] });
   const centers = clusterCenters(list.length);
   return list.map((c, i) => ({ ...c, cx: centers[i][0], cy: centers[i][1] }));
 }
@@ -77,14 +79,15 @@ const discRadius = (members: number) => 64 + Math.min(46, members * 6);
 /** Радиус звезды в мировых единицах: от числа постов. При приближении камеры звезда растёт на экране. */
 const nodeRadius = (n: { posts: number }, maxPosts: number) => 14 + (n.posts / maxPosts) * 12;
 const initialsOf = (name: string) => name.replace(/^Галактика\s+/i, "").replace(/@/g, "").split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "★";
-const plural = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? "человек" : "человек");
 
 /* --------------------------------- небо ---------------------------------- */
 
 function Sky({ graph, meId, meAdmin }: { graph: GraphDto; meId: string | null; meAdmin: boolean }) {
   const router = useRouter();
+  const { t } = useT();
   const svgRef = useRef<SVGSVGElement>(null);
-  const clusters = useMemo(() => buildClusters(graph), [graph]);
+  const lonersLabel = t("explore.loners");
+  const clusters = useMemo(() => buildClusters(graph, lonersLabel), [graph, lonersLabel]);
   const nodesRef = useRef<Node[]>([]);
   const loopRef = useRef<() => void>(() => {});
   const frameRef = useRef(0);
@@ -231,7 +234,7 @@ function Sky({ graph, meId, meAdmin }: { graph: GraphDto; meId: string | null; m
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-line" style={{ background: "radial-gradient(ellipse at 50% 40%, var(--elev), var(--bg) 75%)" }}>
-      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="block aspect-[16/10] w-full select-none" style={{ touchAction: "none" }} role="img" aria-label="Карта галактик — группы и связи между ними"
+      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="block aspect-[16/10] w-full select-none" style={{ touchAction: "none" }} role="img" aria-label={t("explore.mapAria")}
         onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onClick={() => { if (zoomed && !dragRef.current) unfocus(); }}>
         <defs>
           {/* свечение без SVG-фильтров: радиальные градиенты дёшевы при любом масштабе */}
@@ -344,33 +347,33 @@ function Sky({ graph, meId, meAdmin }: { graph: GraphDto; meId: string | null; m
       <div className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap gap-3 text-[11px] text-muted">
         {zoomed ? (
           <>
-            <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 bg-accent" /> взаимная подписка</span>
-            <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 bg-line-strong" /> в одну сторону</span>
-            <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full border-2 border-saffron" /> это вы</span>
+            <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 bg-accent" /> {t("explore.legendMutual")}</span>
+            <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 bg-line-strong" /> {t("explore.legendOneWay")}</span>
+            <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full border-2 border-saffron" /> {t("explore.legendYou")}</span>
           </>
         ) : (
           <>
-            <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 border-t-2 border-dashed border-accent" /> связь галактик</span>
-            <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-saffron" /> число участников</span>
+            <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 border-t-2 border-dashed border-accent" /> {t("explore.legendGalaxyLink")}</span>
+            <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-saffron" /> {t("explore.legendMembers")}</span>
           </>
         )}
       </div>
       <div className="absolute right-3 top-3 flex items-center gap-2">
         <span className="hidden items-center gap-1 rounded-full bg-elev/80 px-2.5 py-1 text-[11px] text-muted backdrop-blur sm:flex">
-          {zoomed ? <><Hand size={12} /> тяните звёзды · клик по звезде — профиль</> : <><Sparkles size={12} /> нажмите на галактику, чтобы приблизить</>}
+          {zoomed ? <><Hand size={12} /> {t("explore.hintZoomed")}</> : <><Sparkles size={12} /> {t("explore.hintOverview")}</>}
         </span>
-        {zoomed && <button onClick={unfocus} className={cn("btn btn-primary gap-1.5 px-3 py-1.5 text-xs")}><ZoomOut size={14} /> К обзору</button>}
-        {!zoomed && <button onClick={shuffle} className="btn btn-outline gap-1.5 px-3 py-1.5 text-xs" title="Расставить заново"><Shuffle size={14} /> Перемешать</button>}
+        {zoomed && <button onClick={unfocus} className={cn("btn btn-primary gap-1.5 px-3 py-1.5 text-xs")}><ZoomOut size={14} /> {t("explore.zoomOut")}</button>}
+        {!zoomed && <button onClick={shuffle} className="btn btn-outline gap-1.5 px-3 py-1.5 text-xs" title={t("explore.shuffleTitle")}><Shuffle size={14} /> {t("explore.shuffle")}</button>}
       </div>
       {zoomed && focused && (
         <div className="absolute left-3 top-3 flex items-center gap-2">
           <div className="flex items-center gap-2 rounded-full bg-elev/85 py-1 pl-1 pr-3 text-xs font-semibold backdrop-blur">
             <GalaxyAvatar galaxy={focused.galaxy} label={focused.label} hue={focused.hue} size={26} />
-            {focused.label} <span className="text-muted">· {focused.members.length} {plural(focused.members.length)}</span>
+            {focused.label} <span className="text-muted">· {t("common.people", { count: focused.members.length })}</span>
           </div>
           {canEdit && (
-            <button onClick={() => setPanel((p) => !p)} className={cn("btn gap-1.5 px-3 py-1.5 text-xs", panel ? "btn-primary" : "btn-outline")} title="Настроить галактику">
-              <Pencil size={13} /> Настроить
+            <button onClick={() => setPanel((p) => !p)} className={cn("btn gap-1.5 px-3 py-1.5 text-xs", panel ? "btn-primary" : "btn-outline")} title={t("explore.configureTitle")}>
+              <Pencil size={13} /> {t("explore.configure")}
             </button>
           )}
         </div>
@@ -398,6 +401,7 @@ function GalaxyPanel({ galaxy, hue, others, links, nameOf, onClose }: {
   const update = useUpdateGalaxy();
   const link = useLinkGalaxies();
   const unlink = useUnlinkGalaxies();
+  const { t } = useT();
   const [name, setName] = useState(galaxy.name);
   const [uploading, setUploading] = useState(false);
   const [toId, setToId] = useState(others[0]?.id ?? "");
@@ -429,12 +433,12 @@ function GalaxyPanel({ galaxy, hue, others, links, nameOf, onClose }: {
   return (
     <div className="absolute left-3 top-14 z-10 w-[min(340px,calc(100%-24px))] rounded-2xl border border-line bg-elev/95 p-3 text-sm shadow-lg backdrop-blur" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
       <div className="mb-2 flex items-center justify-between">
-        <span className="font-semibold">Галактика как группа</span>
-        <button onClick={onClose} className="btn btn-ghost h-7 w-7 p-0" aria-label="Закрыть"><X size={14} /></button>
+        <span className="font-semibold">{t("explore.panelTitle")}</span>
+        <button onClick={onClose} className="btn btn-ghost h-7 w-7 p-0" aria-label={t("common.close")}><X size={14} /></button>
       </div>
 
       <div className="flex items-center gap-3">
-        <label className="group relative cursor-pointer" title="Сменить аватар галактики">
+        <label className="group relative cursor-pointer" title={t("explore.changeGalaxyAvatar")}>
           <GalaxyAvatar galaxy={galaxy} label={galaxy.name} hue={hue} size={56} />
           <span className="absolute inset-0 grid place-items-center rounded-full bg-black/45 text-white opacity-0 transition group-hover:opacity-100">
             {uploading ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
@@ -442,19 +446,19 @@ function GalaxyPanel({ galaxy, hue, others, links, nameOf, onClose }: {
           <input type="file" accept="image/*" className="sr-only" disabled={busy} onChange={(e) => { void onFile(e.target.files?.[0]); e.target.value = ""; }} />
         </label>
         <div className="min-w-0 flex-1">
-          <label className="mb-1 block text-[11px] text-muted">Название группы или отдела</label>
+          <label className="mb-1 block text-[11px] text-muted">{t("explore.groupNameLabel")}</label>
           <div className="flex gap-1.5">
-            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} className="input h-8 min-w-0 flex-1 text-sm" placeholder="Например, Отдел маркетинга"
+            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} className="input h-8 min-w-0 flex-1 text-sm" placeholder={t("explore.groupNamePlaceholder")}
               onKeyDown={(e) => { if (e.key === "Enter") void saveName(); }} />
-            <button onClick={() => void saveName()} disabled={busy || name.trim().length < 2 || name.trim() === galaxy.name} className="btn btn-primary h-8 px-2.5 text-xs">Сохранить</button>
+            <button onClick={() => void saveName()} disabled={busy || name.trim().length < 2 || name.trim() === galaxy.name} className="btn btn-primary h-8 px-2.5 text-xs">{t("common.save")}</button>
           </div>
         </div>
       </div>
-      <p className="mt-1.5 text-[11px] text-muted">Аватар и имя может менять любой участник галактики.</p>
+      <p className="mt-1.5 text-[11px] text-muted">{t("explore.anyMemberHint")}</p>
 
       <div className="mt-3 border-t border-line pt-3">
-        <div className="mb-1.5 flex items-center gap-1.5 font-semibold"><Link2 size={14} /> Связи с другими галактиками</div>
-        {links.length === 0 && <p className="text-[12px] text-muted">Пока нет связей. Опишите ниже, чем ваша галактика связана с другой.</p>}
+        <div className="mb-1.5 flex items-center gap-1.5 font-semibold"><Link2 size={14} /> {t("explore.linksTitle")}</div>
+        {links.length === 0 && <p className="text-[12px] text-muted">{t("explore.noLinks")}</p>}
         <ul className="space-y-1.5">
           {links.map((l) => {
             const otherId = l.from === galaxy.id ? l.to : l.from;
@@ -464,7 +468,7 @@ function GalaxyPanel({ galaxy, hue, others, links, nameOf, onClose }: {
                   <div className="truncate text-[12px] font-semibold">{nameOf(otherId)}</div>
                   <div className="text-[12px] text-ink-2">{l.description}</div>
                 </div>
-                <button onClick={() => unlink.mutate(l.id)} disabled={busy} className="btn btn-ghost h-7 w-7 shrink-0 p-0 text-muted hover:text-rose" title="Удалить связь"><Trash2 size={13} /></button>
+                <button onClick={() => unlink.mutate(l.id)} disabled={busy} className="btn btn-ghost h-7 w-7 shrink-0 p-0 text-muted hover:text-rose" title={t("explore.deleteLink")}><Trash2 size={13} /></button>
               </li>
             );
           })}
@@ -474,12 +478,12 @@ function GalaxyPanel({ galaxy, hue, others, links, nameOf, onClose }: {
             <select value={toId} onChange={(e) => setToId(e.target.value)} className="input h-8 w-full text-sm">
               {others.map((g) => <option key={g.id} value={g.id}>{g.name} · {g.members}</option>)}
             </select>
-            <textarea value={desc} onChange={(e) => setDesc(e.target.value)} maxLength={160} rows={2} className="input w-full resize-none text-sm" placeholder="Чем связаны: общий проект, поставщик, наставничество…" />
+            <textarea value={desc} onChange={(e) => setDesc(e.target.value)} maxLength={160} rows={2} className="input w-full resize-none text-sm" placeholder={t("explore.linkDescPlaceholder")} />
             <button onClick={() => void addLink()} disabled={busy || desc.trim().length < 2} className="btn btn-primary w-full gap-1.5 py-1.5 text-xs">
-              {link.isPending ? <Loader2 size={13} className="animate-spin" /> : <Link2 size={13} />} Связать галактики
+              {link.isPending ? <Loader2 size={13} className="animate-spin" /> : <Link2 size={13} />} {t("explore.linkGalaxies")}
             </button>
           </div>
-        ) : <p className="mt-2 text-[12px] text-muted">Других галактик пока нет.</p>}
+        ) : <p className="mt-2 text-[12px] text-muted">{t("explore.noOtherGalaxies")}</p>}
       </div>
       {err && <p className="mt-2 text-[12px] text-rose">{err}</p>}
     </div>

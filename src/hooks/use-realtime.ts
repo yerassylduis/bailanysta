@@ -8,17 +8,15 @@ import type { NotificationDto, PostDto, UserDto } from "@/lib/types";
 import { PENDING_KEY, isPlainAllFeed, keys, patchPostEverywhere, prependToAllFeed, removePostEverywhere } from "./use-data";
 import { ApiError } from "@/lib/api-client";
 import { playNotify } from "@/lib/sound";
+import { currentLocale, translate } from "@/lib/i18n";
 
 /**
  * Подписка на /api/events (SSE). Обновляет счётчики в шапке, инвалидирует списки,
  * показывает всплывашки о новых событиях и число непрочитанных в заголовке вкладки.
  */
-const TEXT: Record<NotificationDto["type"], string> = {
-  like: "оценил(а) ваш пост", comment: "ответил(а) на ваш пост", follow: "подписался(ась) на вас",
-  mention: "упомянул(а) вас", repost: "репостнул(а) ваш пост", quote: "процитировал(а) ваш пост",
-  reply: "ответил(а) на ваш комментарий", comment_like: "оценил(а) ваш комментарий",
-  call_invite: "приглашает вас в созвон",
-};
+const TYPES: ReadonlySet<string> = new Set<NotificationDto["type"]>(["like", "comment", "follow", "mention", "repost", "quote", "reply", "comment_like", "call_invite"]);
+/** Текст события для всплывашки — из словаря notifications.type.<type>, в текущей локали. */
+const eventText = (type: string) => translate(currentLocale(), TYPES.has(type) ? `notifications.type.${type}` : "notifications.type.unknown");
 
 type MeData = Awaited<ReturnType<typeof api.me>>;
 
@@ -63,8 +61,8 @@ export function useRealtime(enabled: boolean, toast: (text: string, kind?: "info
       if (fresh(d.items.map((n) => n.id))) playNotify();
       if (!pathRef.current.startsWith("/notifications")) {
         for (const n of d.items.slice(-3)) {
-          if (n.type === "call_invite" && n.link) toast(`📞 ${n.actor.name} приглашает вас в созвон`, "success", { label: "Присоединиться", href: n.link });
-          else toast(`${n.actor.name} ${TEXT[n.type] ?? "— новое событие"}`, "success");
+          if (n.type === "call_invite" && n.link) toast(translate(currentLocale(), "notifications.callInviteToast", { name: n.actor.name }), "success", { label: translate(currentLocale(), "notifications.join"), href: n.link });
+          else toast(`${n.actor.name} ${eventText(n.type)}`, "success");
         }
       }
     });

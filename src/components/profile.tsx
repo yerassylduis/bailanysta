@@ -11,7 +11,8 @@ import { FollowButton } from "./follow-button";
 import { Feed } from "./feed";
 import { PostEditor } from "./post-editor";
 import { useToast } from "./toast";
-import { cn, plural } from "@/lib/format";
+import { cn, fmtDate } from "@/lib/format";
+import { useT } from "./locale-provider";
 import Link from "next/link";
 
 /** Страница профиля: шапка со статистикой, редактирование (своего), редактор, посты автора. */
@@ -21,6 +22,7 @@ export function Profile({ handle }: { handle: string }) {
   const logout = useLogout();
   const qc = useQueryClient();
   const toast = useToast();
+  const { t, locale } = useT();
   const [edit, setEdit] = useState(false);
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
@@ -37,25 +39,25 @@ export function Profile({ handle }: { handle: string }) {
       await api.updateProfile(patch);
       await Promise.all([qc.invalidateQueries({ queryKey: keys.profile(handle) }), qc.invalidateQueries({ queryKey: keys.me }), qc.invalidateQueries({ queryKey: ["posts"] }), qc.invalidateQueries({ queryKey: keys.graph })]);
       toast(ok, "success");
-    } catch (e) { toast(e instanceof Error ? e.message : "Ошибка", "error"); }
+    } catch (e) { toast(e instanceof Error ? e.message : t("profile.error"), "error"); }
   };
   const pickAvatar = async (files: FileList) => {
     avatarUp.reset();
     const [m] = await avatarUp.add(files);
-    if (m) await applyLook({ avatarMediaId: m.id }, "Аватар обновлён");
-    else toast(avatarUp.items[0]?.error ?? "Не удалось загрузить", "error");
+    if (m) await applyLook({ avatarMediaId: m.id }, t("profile.avatarUpdated"));
+    else toast(avatarUp.items[0]?.error ?? t("profile.uploadFailed"), "error");
     avatarUp.reset();
   };
   const pickCover = async (files: FileList) => {
     coverUp.reset();
     const [m] = await coverUp.add(files);
-    if (m) await applyLook({ coverMediaId: m.id }, "Фон обновлён");
-    else toast("Не удалось загрузить фон", "error");
+    if (m) await applyLook({ coverMediaId: m.id }, t("profile.coverUpdated"));
+    else toast(t("profile.coverUploadFailed"), "error");
     coverUp.reset();
   };
 
   if (q.isPending) return <ProfileSkeleton />;
-  if (q.isError) return <EmptyState title="Такого человека здесь нет" text={`@${handle} ещё не присоединился к Expert Bailanysta.`} action={<Link href="/" className="btn btn-outline">В ленту</Link>} />;
+  if (q.isError) return <EmptyState title={t("profile.notFoundTitle")} text={t("profile.notFoundText", { handle })} action={<Link href="/" className="btn btn-outline">{t("profile.toFeed")}</Link>} />;
   const p = q.data;
   const own = meData?.user?.id === p.id;
 
@@ -65,8 +67,8 @@ export function Profile({ handle }: { handle: string }) {
     try {
       await api.updateProfile({ name: name.trim() || p.name, bio: bio.trim(), ...(phone.trim() ? { phone: phone.trim() } : {}), ...(email.trim() ? { email: email.trim() } : {}), ...(birthday ? { birthday } : {}) });
       await Promise.all([qc.invalidateQueries({ queryKey: keys.profile(handle) }), qc.invalidateQueries({ queryKey: keys.me }), qc.invalidateQueries({ queryKey: ["posts"] })]);
-      setEdit(false); toast("Профиль обновлён", "success");
-    } catch (e) { toast(e instanceof Error ? e.message : "Ошибка", "error"); }
+      setEdit(false); toast(t("profile.updated"), "success");
+    } catch (e) { toast(e instanceof Error ? e.message : t("profile.error"), "error"); }
     finally { setSaving(false); }
   };
 
@@ -78,15 +80,15 @@ export function Profile({ handle }: { handle: string }) {
             <div className="absolute right-3 top-3 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center justify-end gap-2">
               <div className="flex gap-1.5 rounded-full bg-black/35 p-1 backdrop-blur">
                 {COVER_GRADIENTS.map((g, i) => (
-                  <button key={i} onClick={() => applyLook({ coverPreset: i }, "Фон обновлён")} title={`Фон ${i + 1}`}
+                  <button key={i} onClick={() => applyLook({ coverPreset: i }, t("profile.coverUpdated"))} title={t("profile.coverN", { n: i + 1 })}
                     className={cn("h-6 w-6 rounded-full ring-2 ring-white/70 transition hover:scale-110", p.cover === `preset:${i}` && "ring-white scale-110")} style={{ background: g }} />
                 ))}
               </div>
               <label className="btn cursor-pointer bg-black/45 px-3 py-1.5 text-xs text-white backdrop-blur hover:bg-black/60">
-                <ImagePlus size={14} /> {coverUp.uploading ? "Загрузка…" : "Своя картинка"}
+                <ImagePlus size={14} /> {coverUp.uploading ? t("common.loading") : t("profile.ownImage")}
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.length) pickCover(e.target.files); e.target.value = ""; }} />
               </label>
-              {p.cover && <button onClick={() => applyLook({ coverPreset: null }, "Фон сброшен")} className="btn bg-black/45 px-3 py-1.5 text-xs text-white backdrop-blur hover:bg-black/60"><Trash2 size={14} /> Сбросить</button>}
+              {p.cover && <button onClick={() => applyLook({ coverPreset: null }, t("profile.coverReset"))} className="btn bg-black/45 px-3 py-1.5 text-xs text-white backdrop-blur hover:bg-black/60"><Trash2 size={14} /> {t("profile.reset")}</button>}
             </div>
           )}
         </div>
@@ -96,23 +98,23 @@ export function Profile({ handle }: { handle: string }) {
               <Avatar user={p} size={84} className="ring-4 ring-elev" />
               {edit && (
                 <>
-                  <label className="absolute -bottom-1 -right-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-accent text-accent-ink shadow-card transition hover:brightness-110" title="Сменить аватар">
+                  <label className="absolute -bottom-1 -right-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-accent text-accent-ink shadow-card transition hover:brightness-110" title={t("profile.changeAvatar")}>
                     {avatarUp.uploading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Camera size={15} />}
                     <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.length) pickAvatar(e.target.files); e.target.value = ""; }} />
                   </label>
-                  {p.avatarUrl && <button onClick={() => applyLook({ avatarMediaId: null }, "Аватар убран")} className="absolute -left-1 -bottom-1 flex h-7 w-7 items-center justify-center rounded-full bg-elev text-rose shadow-card" title="Убрать аватар"><X size={13} /></button>}
+                  {p.avatarUrl && <button onClick={() => applyLook({ avatarMediaId: null }, t("profile.avatarRemoved"))} className="absolute -left-1 -bottom-1 flex h-7 w-7 items-center justify-center rounded-full bg-elev text-rose shadow-card" title={t("profile.removeAvatar")}><X size={13} /></button>}
                 </>
               )}
             </div>
             <div className="flex flex-wrap justify-end gap-2 pb-1">
               {own ? (
                 <>
-                  <button onClick={edit ? () => setEdit(false) : startEdit} className="btn btn-outline">{edit ? <><X size={16} /> Отмена</> : <><Pencil size={16} /> Редактировать</>}</button>
-                  <button onClick={() => logout.mutate()} className="btn btn-ghost" title="Выйти"><LogOut size={16} /></button>
+                  <button onClick={edit ? () => setEdit(false) : startEdit} className="btn btn-outline">{edit ? <><X size={16} /> {t("common.cancel")}</> : <><Pencil size={16} /> {t("profile.editBtn")}</>}</button>
+                  <button onClick={() => logout.mutate()} className="btn btn-ghost" title={t("profile.logout")}><LogOut size={16} /></button>
                 </>
               ) : (
                 <>
-                  {meData?.user && <Link href={`/messages/${p.handle}`} className="btn btn-outline btn-icon" aria-label="Написать сообщение" title="Написать"><MessageCircle size={18} /></Link>}
+                  {meData?.user && <Link href={`/messages/${p.handle}`} className="btn btn-outline btn-icon" aria-label={t("profile.writeMessage")} title={t("nav.compose")}><MessageCircle size={18} /></Link>}
                   <FollowButton handle={p.handle} following={p.viewerFollows} />
                 </>
               )}
@@ -121,33 +123,33 @@ export function Profile({ handle }: { handle: string }) {
 
           {edit ? (
             <div className="mt-4 space-y-2">
-              <input value={name} onChange={(e) => setName(e.target.value)} className="input font-semibold" maxLength={60} placeholder="Имя" />
-              <textarea value={bio} onChange={(e) => setBio(e.target.value)} className="input resize-none" rows={2} maxLength={200} placeholder="Пара слов о себе" />
+              <input value={name} onChange={(e) => setName(e.target.value)} className="input font-semibold" maxLength={60} placeholder={t("common.name")} />
+              <textarea value={bio} onChange={(e) => setBio(e.target.value)} className="input resize-none" rows={2} maxLength={200} placeholder={t("profile.bioPlaceholder")} />
               <div className="grid gap-2 sm:grid-cols-3">
-                <label className="block"><span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted">Телефон</span><input value={phone} onChange={(e) => setPhone(e.target.value)} className="input" placeholder="+7 701 000 00 00" inputMode="tel" /></label>
-                <label className="block"><span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted">Почта</span><input value={email} onChange={(e) => setEmail(e.target.value)} className="input" placeholder="you@mail.kz" inputMode="email" /></label>
-                <label className="block"><span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted">Дата рождения</span><input type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} className="input" /></label>
+                <label className="block"><span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted">{t("profile.phone")}</span><input value={phone} onChange={(e) => setPhone(e.target.value)} className="input" placeholder="+7 701 000 00 00" inputMode="tel" /></label>
+                <label className="block"><span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted">{t("profile.email")}</span><input value={email} onChange={(e) => setEmail(e.target.value)} className="input" placeholder="you@mail.kz" inputMode="email" /></label>
+                <label className="block"><span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted">{t("profile.birthday")}</span><input type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} className="input" /></label>
               </div>
-              <p className="text-[11px] text-muted">Телефон и почта используются для входа по коду; другим пользователям они не показываются.</p>
-              <div className="flex justify-end"><button onClick={save} disabled={saving} className="btn btn-primary"><Check size={16} /> Сохранить</button></div>
+              <p className="text-[11px] text-muted">{t("profile.contactsHint")}</p>
+              <div className="flex justify-end"><button onClick={save} disabled={saving} className="btn btn-primary"><Check size={16} /> {t("common.save")}</button></div>
             </div>
           ) : (
             <div className="mt-3">
               <h1 className="font-display text-2xl font-bold leading-tight">{p.name}</h1>
               <p className="text-sm text-muted">@{p.handle}</p>
               {p.bio && <p className="mt-2.5 max-w-lg text-[15px] leading-relaxed">{p.bio}</p>}
-              <p className="mt-2.5 flex items-center gap-1.5 text-xs text-muted"><CalendarDays size={13} /> с нами с {new Date(p.createdAt).toLocaleDateString("ru-RU", { month: "long", year: "numeric" })}</p>
+              <p className="mt-2.5 flex items-center gap-1.5 text-xs text-muted"><CalendarDays size={13} /> {t("profile.withUsSince", { date: fmtDate(p.createdAt, locale, { month: "long", year: "numeric" }) })}</p>
             </div>
           )}
 
           <dl className="mt-4 grid grid-cols-4 gap-2 border-t border-line pt-4 text-center sm:max-w-md sm:text-left">
-            {[
-              [p.stats.posts, plural(p.stats.posts, "пост", "поста", "постов")],
-              [p.stats.followers, plural(p.stats.followers, "подписчик", "подписчика", "подписчиков")],
-              [p.stats.following, "подписок"],
-              [p.stats.likesReceived, plural(p.stats.likesReceived, "лайк", "лайка", "лайков")],
-            ].map(([n, l]) => (
-              <div key={l as string}><dt className="font-display text-lg font-bold tabular-nums">{n}</dt><dd className="text-[11px] text-muted">{l}</dd></div>
+            {([
+              ["posts", p.stats.posts, t("profile.statPosts", { count: p.stats.posts })],
+              ["followers", p.stats.followers, t("profile.statFollowers", { count: p.stats.followers })],
+              ["following", p.stats.following, t("profile.statFollowing")],
+              ["likes", p.stats.likesReceived, t("profile.statLikes", { count: p.stats.likesReceived })],
+            ] as const).map(([id, n, l]) => (
+              <div key={id}><dt className="font-display text-lg font-bold tabular-nums">{n}</dt><dd className="text-[11px] text-muted">{l}</dd></div>
             ))}
           </dl>
         </div>
@@ -155,8 +157,8 @@ export function Profile({ handle }: { handle: string }) {
 
       {own && <PostEditor />}
 
-      <h2 className="px-1 font-display text-sm font-bold uppercase tracking-wider text-muted">Посты</h2>
-      <Feed filter={{ author: p.handle }} emptyTitle={own ? "Вы ещё ничего не написали" : "Здесь пока пусто"} emptyText={own ? "Первый пост — самый лёгкий. Cosmos поможет." : "Автор ещё собирается с мыслями."} />
+      <h2 className="px-1 font-display text-sm font-bold uppercase tracking-wider text-muted">{t("profile.postsHeading")}</h2>
+      <Feed filter={{ author: p.handle }} emptyTitle={own ? t("profile.emptyOwnTitle") : t("profile.emptyTitle")} emptyText={own ? t("profile.emptyOwnText") : t("profile.emptyText")} />
     </div>
   );
 }

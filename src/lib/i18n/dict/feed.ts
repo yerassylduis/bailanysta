@@ -1,0 +1,51 @@
+import type { Namespace } from "../index";
+
+/** Неймспейс «feed»: бесконечная лента, главная, закладки. Ключи одинаковы во всех трёх языках; множественное число — key.one/few/many/other. */
+const feed: Namespace = {
+  ru: {
+    loadFailed: "Не удалось загрузить ленту",
+    "newPosts.one": "{count} новый пост", "newPosts.few": "{count} новых поста", "newPosts.many": "{count} новых постов", "newPosts.other": "{count} новых поста",
+    theEnd: "Это всё. Степь большая, но лента закончилась.",
+    heroTitle1: "Байланыс —", heroTitle2: "это связь между людьми.",
+    heroText: "Уютная сеть: посты с настроением, фото и видео, личные сообщения, созвездие подписок и ИИ-соавтор Cosmos. Без паролей — просто выберите ник.",
+    loginByHandle: "Войти по нику", seeConstellation: "Смотреть созвездие",
+    following: "Подписки", hot: "Горячее",
+    emptyFollowing: "В подписках пока тихо", emptyHot: "За неделю ещё ничего не разгорелось", emptyMood: "Постов с таким настроением ещё нет",
+    emptyFollowingText: "Подпишитесь на кого-нибудь в созвездии — и лента оживёт.", emptyText: "Станьте первым, кто задаст этот тон.",
+    openConstellation: "Открыть созвездие",
+    bookmarksOnly: "Закладки только для своих", bookmarksLoginText: "Войдите, чтобы сохранять посты на потом.",
+    bookmarksSubtitle: "Посты, которые вы сохранили. Видите только вы.",
+    bookmarksEmpty: "Пока ничего не сохранено", bookmarksEmptyText: "Нажмите на закладку под любым постом — он появится здесь.",
+  },
+  kk: {
+    loadFailed: "Лентаны жүктеу мүмкін болмады",
+    "newPosts.other": "{count} жаңа жазба",
+    theEnd: "Осымен бітті. Дала кең, бірақ лента аяқталды.",
+    heroTitle1: "Байланыс —", heroTitle2: "адамдар арасындағы байланыс.",
+    heroText: "Жайлы желі: көңіл-күйі бар жазбалар, фото мен видео, жеке хабарламалар, жазылымдар шоқжұлдызы және Cosmos ИИ-серіктесі. Құпиясөзсіз — жай ғана ник таңдаңыз.",
+    loginByHandle: "Ник арқылы кіру", seeConstellation: "Шоқжұлдызды көру",
+    following: "Жазылымдар", hot: "Қызу",
+    emptyFollowing: "Жазылымдарда әзірге тыныш", emptyHot: "Бұл аптада әлі ештеңе қызбады", emptyMood: "Мұндай көңіл-күйдегі жазбалар әлі жоқ",
+    emptyFollowingText: "Шоқжұлдыздан біреуге жазылыңыз — лента жанданады.", emptyText: "Осы үнді бірінші болып қойыңыз.",
+    openConstellation: "Шоқжұлдызды ашу",
+    bookmarksOnly: "Бетбелгілер өз адамдарымыз үшін ғана", bookmarksLoginText: "Жазбаларды кейінге сақтау үшін кіріңіз.",
+    bookmarksSubtitle: "Сіз сақтаған жазбалар. Оларды тек сіз көресіз.",
+    bookmarksEmpty: "Әзірге ештеңе сақталмаған", bookmarksEmptyText: "Кез келген жазбаның астындағы бетбелгіні басыңыз — ол осында пайда болады.",
+  },
+  en: {
+    loadFailed: "Could not load the feed",
+    "newPosts.one": "{count} new post", "newPosts.other": "{count} new posts",
+    theEnd: "That's all. The steppe is vast, but the feed has ended.",
+    heroTitle1: "Bailanys —", heroTitle2: "the connection between people.",
+    heroText: "A cosy network: posts with a mood, photos and video, private messages, a constellation of connections and the Cosmos AI co-author. No passwords — just pick a handle.",
+    loginByHandle: "Sign in with a handle", seeConstellation: "See the constellation",
+    following: "Following", hot: "Hot",
+    emptyFollowing: "Quiet in your subscriptions so far", emptyHot: "Nothing has caught fire this week yet", emptyMood: "No posts with this mood yet",
+    emptyFollowingText: "Follow someone in the constellation — and the feed will come alive.", emptyText: "Be the first to set this tone.",
+    openConstellation: "Open the constellation",
+    bookmarksOnly: "Bookmarks are for members only", bookmarksLoginText: "Sign in to save posts for later.",
+    bookmarksSubtitle: "Posts you have saved. Only you can see them.",
+    bookmarksEmpty: "Nothing saved yet", bookmarksEmptyText: "Tap the bookmark under any post — it will appear here.",
+  },
+};
+export default feed;

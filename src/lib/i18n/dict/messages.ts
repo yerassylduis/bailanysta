@@ -1,0 +1,51 @@
+import type { Namespace } from "../index";
+
+/** Неймспейс «messages»: диалоги, группы, композер. Ключи одинаковы во всех трёх языках; множественное число — key.one/few/many/other. */
+const messages: Namespace = {
+  ru: {
+    onlyForOwn: "Сообщения только для своих", loginText: "Войдите, чтобы переписываться с людьми из созвездия.",
+    newGroup: "Новая группа", group: "Группа", pickDialog: "Выберите диалог",
+    "pickHint.before": "напишите кому-нибудь со страницы профиля или ", "pickHint.link": "создайте группу", "pickHint.after": ".",
+    noDialogs: "Пока ни одного диалога. Откройте профиль человека и нажмите «Написать» или создайте группу.",
+    you: "Вы", mediaAttachment: "📎 Медиа", noMessages: "Нет сообщений",
+    sendFailed: "Не отправилось", attach: "Фото или видео", placeholder: "Сообщение…",
+    startConversation: "Начните разговор — напишите первым. Можно прикрепить фото или видео.", joinCall: "Присоединиться к созвону",
+    bot: "бот", botReplies: "отвечает мгновенно", botTyping: "Көмекші печатает…",
+    memberAdded: "Участник добавлен", error: "Ошибка", leaveConfirm: "Покинуть группу?",
+    "members.one": "{count} участник", "members.few": "{count} участника", "members.many": "{count} участников", "members.other": "{count} участника",
+    addMember: "Добавить участника", leaveGroup: "Покинуть группу", handlePlaceholder: "ник участника",
+    groupCreated: "Группа создана", groupTitlePlaceholder: "Название группы", searchMember: "Найти участника по нику или имени…",
+    chatWith: "Чат с {name}",
+  },
+  kk: {
+    onlyForOwn: "Хабарламалар өз адамдарымыз үшін ғана", loginText: "Шоқжұлдыздағы адамдармен хат алысу үшін кіріңіз.",
+    newGroup: "Жаңа топ", group: "Топ", pickDialog: "Диалогты таңдаңыз",
+    "pickHint.before": "профиль бетінен біреуге жазыңыз немесе ", "pickHint.link": "топ құрыңыз", "pickHint.after": ".",
+    noDialogs: "Әзірге бірде-бір диалог жоқ. Адамның профилін ашып, «Жазу» түймесін басыңыз немесе топ құрыңыз.",
+    you: "Сіз", mediaAttachment: "📎 Медиа", noMessages: "Хабарлама жоқ",
+    sendFailed: "Жіберілмеді", attach: "Фото немесе видео", placeholder: "Хабарлама…",
+    startConversation: "Сөйлесуді бастаңыз — бірінші болып жазыңыз. Фото немесе видео тіркеуге болады.", joinCall: "Қоңырауға қосылу",
+    bot: "бот", botReplies: "лезде жауап береді", botTyping: "Көмекші жазып жатыр…",
+    memberAdded: "Қатысушы қосылды", error: "Қате", leaveConfirm: "Топтан шығу керек пе?",
+    "members.other": "{count} қатысушы",
+    addMember: "Қатысушы қосу", leaveGroup: "Топтан шығу", handlePlaceholder: "қатысушы нигі",
+    groupCreated: "Топ құрылды", groupTitlePlaceholder: "Топ атауы", searchMember: "Қатысушыны ник немесе аты бойынша іздеу…",
+    chatWith: "{name} — чат",
+  },
+  en: {
+    onlyForOwn: "Messages are for members only", loginText: "Sign in to chat with people from the constellation.",
+    newGroup: "New group", group: "Group", pickDialog: "Pick a conversation",
+    "pickHint.before": "message someone from their profile page or ", "pickHint.link": "create a group", "pickHint.after": ".",
+    noDialogs: "No conversations yet. Open someone's profile and tap “Message”, or create a group.",
+    you: "You", mediaAttachment: "📎 Media", noMessages: "No messages",
+    sendFailed: "Could not send", attach: "Photo or video", placeholder: "Message…",
+    startConversation: "Start the conversation — write first. You can attach a photo or video.", joinCall: "Join the call",
+    bot: "bot", botReplies: "replies instantly", botTyping: "Kömekshi is typing…",
+    memberAdded: "Member added", error: "Error", leaveConfirm: "Leave the group?",
+    "members.one": "{count} member", "members.other": "{count} members",
+    addMember: "Add a member", leaveGroup: "Leave the group", handlePlaceholder: "member's handle",
+    groupCreated: "Group created", groupTitlePlaceholder: "Group name", searchMember: "Find a member by handle or name…",
+    chatWith: "Chat with {name}",
+  },
+};
+export default messages;

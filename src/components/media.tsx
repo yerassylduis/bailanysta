@@ -5,18 +5,20 @@ import { X, ChevronLeft, ChevronRight, Play, ImagePlus, Film } from "lucide-reac
 import type { MediaDto } from "@/lib/types";
 import type { Attachment } from "@/hooks/use-upload";
 import { cn } from "@/lib/format";
+import { useT } from "./locale-provider";
 
 /* ------------------------------ Сетка медиа ------------------------------ */
 
 /** 1 файл — во всю ширину с сохранением пропорций; 2 — пополам; 3 — 1 большой + 2; 4 — 2×2. */
 export function MediaGrid({ media, className }: { media: MediaDto[]; className?: string }) {
   const [open, setOpen] = useState<number | null>(null);
+  const { t } = useT();
   if (!media.length) return null;
   const n = media.length;
 
   const tile = (m: MediaDto, i: number, extra?: string) => (
     <button key={m.id} type="button" onClick={(e) => { e.stopPropagation(); if (m.kind === "image") setOpen(i); }}
-      className={cn("relative block overflow-hidden bg-bg-2 focus:outline-none", extra)} aria-label={m.kind === "image" ? "Открыть фото" : "Видео"}>
+      className={cn("relative block overflow-hidden bg-bg-2 focus:outline-none", extra)} aria-label={m.kind === "image" ? t("posts.openPhoto") : t("posts.video")}>
       {m.kind === "image" ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={m.url} alt="" loading="lazy" className="h-full w-full object-cover transition duration-300 hover:scale-[1.02]" />
@@ -63,6 +65,7 @@ export function VideoPlayer({ media, autoPlayOnClick = true }: { media: MediaDto
 /* ------------------------------- Лайтбокс -------------------------------- */
 
 export function Lightbox({ media, index, onClose, onIndex }: { media: MediaDto[]; index: number; onClose: () => void; onIndex: (i: number) => void }) {
+  const { t } = useT();
   const images = media.filter((m) => m.kind === "image");
   const cur = images[Math.min(index, images.length - 1)];
   useEffect(() => {
@@ -77,14 +80,14 @@ export function Lightbox({ media, index, onClose, onIndex }: { media: MediaDto[]
   }, [index, images.length, onClose, onIndex]);
   if (!cur) return null;
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-3 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); onClose(); }} role="dialog" aria-label="Просмотр фото">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-3 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); onClose(); }} role="dialog" aria-label={t("posts.viewPhoto")}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={cur.url} alt="" className="max-h-[92vh] max-w-[96vw] rounded-lg object-contain shadow-2xl fade-in" onClick={(e) => e.stopPropagation()} />
-      <button onClick={onClose} className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/30" aria-label="Закрыть"><X size={20} /></button>
+      <button onClick={onClose} className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/30" aria-label={t("common.close")}><X size={20} /></button>
       {images.length > 1 && (
         <>
-          <button onClick={(e) => { e.stopPropagation(); onIndex((index - 1 + images.length) % images.length); }} className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/30" aria-label="Назад"><ChevronLeft size={22} /></button>
-          <button onClick={(e) => { e.stopPropagation(); onIndex((index + 1) % images.length); }} className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/30" aria-label="Вперёд"><ChevronRight size={22} /></button>
+          <button onClick={(e) => { e.stopPropagation(); onIndex((index - 1 + images.length) % images.length); }} className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/30" aria-label={t("common.back")}><ChevronLeft size={22} /></button>
+          <button onClick={(e) => { e.stopPropagation(); onIndex((index + 1) % images.length); }} className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/30" aria-label={t("posts.next")}><ChevronRight size={22} /></button>
           <span className="absolute bottom-4 rounded-full bg-white/15 px-3 py-1 text-xs text-white">{index + 1} / {images.length}</span>
         </>
       )}
@@ -94,16 +97,19 @@ export function Lightbox({ media, index, onClose, onIndex }: { media: MediaDto[]
 
 /* --------------------------- Вложения в редакторе -------------------------- */
 
-export function AttachButton({ onFiles, disabled, accept = "image/*,video/*", className, label = "Фото или видео" }: { onFiles: (f: FileList) => void; disabled?: boolean; accept?: string; className?: string; label?: string }) {
+export function AttachButton({ onFiles, disabled, accept = "image/*,video/*", className, label }: { onFiles: (f: FileList) => void; disabled?: boolean; accept?: string; className?: string; label?: string }) {
+  const { t } = useT();
+  const text = label ?? t("posts.attachLabel");
   return (
-    <label className={cn("btn btn-ghost cursor-pointer gap-1.5 px-3 text-accent", disabled && "pointer-events-none opacity-50", className)} title={label}>
-      <ImagePlus size={18} /><span className="hidden sm:inline">{label}</span>
+    <label className={cn("btn btn-ghost cursor-pointer gap-1.5 px-3 text-accent", disabled && "pointer-events-none opacity-50", className)} title={text}>
+      <ImagePlus size={18} /><span className="hidden sm:inline">{text}</span>
       <input type="file" accept={accept} multiple className="hidden" disabled={disabled} onChange={(e) => { if (e.target.files?.length) onFiles(e.target.files); e.target.value = ""; }} />
     </label>
   );
 }
 
 export function AttachmentPreviews({ items, onRemove }: { items: Attachment[]; onRemove: (id: string) => void }) {
+  const { t } = useT();
   if (!items.length) return null;
   return (
     <div className={cn("mt-3 grid gap-2", items.length === 1 ? "grid-cols-1" : "grid-cols-2")}>
@@ -116,14 +122,14 @@ export function AttachmentPreviews({ items, onRemove }: { items: Attachment[]; o
             <div className="relative flex h-full min-h-48 w-full items-center justify-center bg-black">
               {/* видео можно посмотреть до публикации: controls + звук */}
               <video src={a.preview} className="max-h-80 w-full object-contain" controls playsInline preload="metadata" />
-              <span className="pointer-events-none absolute left-2 top-2 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[11px] text-white"><Film size={12} /> видео</span>
+              <span className="pointer-events-none absolute left-2 top-2 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[11px] text-white"><Film size={12} /> {t("posts.videoBadge")}</span>
             </div>
           )}
           {!a.media && !a.error && (
             <div className="absolute inset-x-0 bottom-0 h-1.5 bg-black/30"><div className="h-full bg-accent transition-all" style={{ width: `${Math.max(5, a.progress * 100)}%` }} /></div>
           )}
           {a.error && <div className="absolute inset-0 flex items-center justify-center bg-rose/80 p-2 text-center text-xs font-semibold text-white">{a.error}</div>}
-          <button type="button" onClick={() => onRemove(a.localId)} className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80" aria-label="Убрать"><X size={14} /></button>
+          <button type="button" onClick={() => onRemove(a.localId)} className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80" aria-label={t("common.remove")}><X size={14} /></button>
         </div>
       ))}
     </div>

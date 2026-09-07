@@ -1,5 +1,6 @@
 "use client";
 
+import { currentLocale, translate } from "@/lib/i18n";
 import { useCallback, useState } from "react";
 import { api } from "@/lib/api-client";
 import type { MediaDto } from "@/lib/types";
@@ -68,7 +69,7 @@ export function useUpload(limits = { images: 4, videos: 1 }, opts: { maxSide?: n
         patch(localId, { media, progress: 1 });
         done.push(media);
       } catch (e) {
-        patch(localId, { error: e instanceof Error ? e.message : "Ошибка загрузки" });
+        patch(localId, { error: e instanceof Error ? e.message : translate(currentLocale(), "posts.uploadError") });
       }
     }
     return done;

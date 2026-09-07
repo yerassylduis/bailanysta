@@ -4,12 +4,13 @@ import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowUp } from "lucide-react";
 import { PENDING_KEY, prependToAllFeed, useFeed, usePendingPosts, type FeedFilter } from "@/hooks/use-data";
-import { plural } from "@/lib/format";
+import { useT } from "./locale-provider";
 import { PostCard } from "./post-card";
 import { EmptyState, FeedSkeleton, PostSkeleton } from "./ui";
 
 /** Бесконечная лента: курсорная пагинация + IntersectionObserver + скелетоны. */
-export function Feed({ filter, live, emptyTitle = "Пока пусто", emptyText, emptyAction }: { filter: FeedFilter; live?: boolean; emptyTitle?: string; emptyText?: string; emptyAction?: React.ReactNode }) {
+export function Feed({ filter, live, emptyTitle, emptyText, emptyAction }: { filter: FeedFilter; live?: boolean; emptyTitle?: string; emptyText?: string; emptyAction?: React.ReactNode }) {
+  const { t } = useT();
   const q = useFeed(filter);
   const qc = useQueryClient();
   const { data: pending } = usePendingPosts();
@@ -33,22 +34,22 @@ export function Feed({ filter, live, emptyTitle = "Пока пусто", emptyTe
   }, [q, q.hasNextPage, q.isFetchingNextPage]);
 
   if (q.isPending) return <FeedSkeleton />;
-  if (q.isError) return <EmptyState title="Не удалось загрузить ленту" text={q.error.message} action={<button onClick={() => q.refetch()} className="btn btn-outline">Повторить</button>} />;
+  if (q.isError) return <EmptyState title={t("feed.loadFailed")} text={q.error.message} action={<button onClick={() => q.refetch()} className="btn btn-outline">{t("common.retry")}</button>} />;
 
   const items = q.data.pages.flatMap((p) => p.items);
-  if (!items.length) return <EmptyState title={emptyTitle} text={emptyText} action={emptyAction} />;
+  if (!items.length) return <EmptyState title={emptyTitle ?? t("common.nothing")} text={emptyText} action={emptyAction} />;
 
   return (
     <div className="space-y-4">
       {live && pending.length > 0 && (
         <div className="sticky top-2 z-30 flex justify-center">
-          <button onClick={showPending} className="btn btn-primary fade-in shadow-card"><ArrowUp size={16} /> {pending.length} {plural(pending.length, "новый пост", "новых поста", "новых постов")}</button>
+          <button onClick={showPending} className="btn btn-primary fade-in shadow-card"><ArrowUp size={16} /> {t("feed.newPosts", { count: pending.length })}</button>
         </div>
       )}
       {items.map((p) => <PostCard key={p.id} post={p} />)}
       <div ref={sentinel} />
       {q.isFetchingNextPage && <PostSkeleton />}
-      {!q.hasNextPage && items.length > 5 && <p className="py-6 text-center text-xs text-muted">Это всё. Степь большая, но лента закончилась.</p>}
+      {!q.hasNextPage && items.length > 5 && <p className="py-6 text-center text-xs text-muted">{t("feed.theEnd")}</p>}
     </div>
   );
 }

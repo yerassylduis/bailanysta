@@ -13,6 +13,8 @@ import { RightRail } from "./right-rail";
 import { CommandPalette, useCommandPalette } from "./command-palette";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useToast } from "./toast";
+import { LangToggle, useT } from "./locale-provider";
+import { fmtDateTime } from "@/lib/format";
 
 /**
  * Каркас: слева навигация (≥ md), в центре контент, справа «рельс» (≥ xl).
@@ -27,21 +29,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const palette = useCommandPalette();
   const isChat = /^\/messages\/.+/.test(pathname) || /^\/calls\/.+/.test(pathname);
   const toast = useToast();
+  const { t, locale } = useT();
   useRealtime(!!me, toast); // живые уведомления и сообщения без перезагрузки
 
   const items = [
-    { href: "/", label: "Лента", icon: Home, badge: 0, match: (p: string) => p === "/" || p.startsWith("/post") },
-    { href: "/explore", label: "Созвездие", icon: Compass, badge: 0, match: (p: string) => p.startsWith("/explore") || p.startsWith("/search") },
+    { href: "/", label: t("nav.feed"), icon: Home, badge: 0, match: (p: string) => p === "/" || p.startsWith("/post") },
+    { href: "/explore", label: t("nav.explore"), icon: Compass, badge: 0, match: (p: string) => p.startsWith("/explore") || p.startsWith("/search") },
     ...(me ? [
-      { href: "/messages", label: "Сообщения", icon: MessageCircle, badge: unreadMsgs, match: (p: string) => p.startsWith("/messages") },
-      { href: "/calls", label: "Байланыс", icon: Video, badge: 0, match: (p: string) => p.startsWith("/calls") },
-      { href: "/notifications", label: "Уведомления", icon: Bell, badge: unread, match: (p: string) => p.startsWith("/notifications") },
-      { href: "/bookmarks", label: "Закладки", icon: Bookmark, badge: 0, match: (p: string) => p.startsWith("/bookmarks") },
+      { href: "/messages", label: t("nav.messages"), icon: MessageCircle, badge: unreadMsgs, match: (p: string) => p.startsWith("/messages") },
+      { href: "/calls", label: t("nav.calls"), icon: Video, badge: 0, match: (p: string) => p.startsWith("/calls") },
+      { href: "/notifications", label: t("nav.notifications"), icon: Bell, badge: unread, match: (p: string) => p.startsWith("/notifications") },
+      { href: "/bookmarks", label: t("nav.bookmarks"), icon: Bookmark, badge: 0, match: (p: string) => p.startsWith("/bookmarks") },
     ] : []),
     me
-      ? { href: `/u/${me.handle}`, label: "Профиль", icon: UserRound, badge: 0, match: (p: string) => p === `/u/${me.handle}` }
-      : { href: "/login", label: "Войти", icon: LogIn, badge: 0, match: (p: string) => p.startsWith("/login") },
-    ...(me?.isAdmin ? [{ href: "/admin", label: "Админ", icon: ShieldCheck, badge: 0, match: (p: string) => p.startsWith("/admin") }] : []),
+      ? { href: `/u/${me.handle}`, label: t("nav.profile"), icon: UserRound, badge: 0, match: (p: string) => p === `/u/${me.handle}` }
+      : { href: "/login", label: t("nav.login"), icon: LogIn, badge: 0, match: (p: string) => p.startsWith("/login") },
+    ...(me?.isAdmin ? [{ href: "/admin", label: t("nav.admin"), icon: ShieldCheck, badge: 0, match: (p: string) => p.startsWith("/admin") }] : []),
   ];
   const mobileItems = items.filter((i) => i.href !== "/bookmarks" && i.href !== "/calls" && i.href !== "/admin");
 
@@ -51,9 +54,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen items-center justify-center p-6">
         <div className="card max-w-md p-8 text-center">
           <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-rose-soft text-rose"><Ban size={28} /></span>
-          <h1 className="font-display text-2xl font-bold">Аккаунт заблокирован</h1>
-          <p className="mt-2 text-sm text-ink-2">{me.banned.until ? `До ${new Date(me.banned.until).toLocaleString("ru-RU", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}` : "Без срока"}{me.banned.reason ? ` · причина: ${me.banned.reason}` : ""}</p>
-          <p className="mt-3 text-xs text-muted">Если вы считаете, что это ошибка, напишите администратору на почту сети.</p>
+          <h1 className="font-display text-2xl font-bold">{t("nav.bannedTitle")}</h1>
+          <p className="mt-2 text-sm text-ink-2">{me.banned.until ? t("nav.bannedUntil", { date: fmtDateTime(me.banned.until, locale, { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }) }) : t("nav.bannedForever")}{me.banned.reason ? ` · ${t("nav.bannedReason", { reason: me.banned.reason })}` : ""}</p>
+          <p className="mt-3 text-xs text-muted">{t("nav.bannedHint")}</p>
           <BannedLogout />
         </div>
       </div>
@@ -75,18 +78,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <NavLink key={it.href} href={it.href} active={it.match(pathname)} icon={it.icon} badge={it.badge}>{it.label}</NavLink>
             ))}
             <button onClick={palette.open} className="btn btn-ghost justify-start gap-3 px-3 py-2.5 text-[15px]">
-              <Search size={20} strokeWidth={1.9} /> Поиск
+              <Search size={20} strokeWidth={1.9} /> {t("nav.search")}
               <kbd className="ml-auto hidden items-center gap-0.5 rounded-md border border-line-strong px-1.5 py-0.5 text-[10px] text-muted lg:inline-flex"><Command size={10} />K</kbd>
             </button>
           </nav>
 
-          {me && <Link href="/?compose=1" className="btn btn-primary mt-5 py-3 text-[15px] shadow-card"><Sparkles size={18} /> Написать</Link>}
+          {me && <Link href="/?compose=1" className="btn btn-primary mt-5 py-3 text-[15px] shadow-card"><Sparkles size={18} /> {t("nav.compose")}</Link>}
 
           <div className="mt-auto space-y-3 pt-6">
             <div className="flex items-center gap-2">
               <div className="min-w-0 flex-1"><ThemeToggle /></div>
               <SoundToggle />
             </div>
+            <LangToggle />
             {me ? (
               <Link href={`/u/${me.handle}`} className="card flex items-center gap-3 p-2.5 transition hover:border-line-strong">
                 <Avatar user={me} size={36} />
@@ -96,7 +100,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </span>
               </Link>
             ) : (
-              <Link href="/login" className="btn btn-outline w-full">Войти по нику</Link>
+              <Link href="/login" className="btn btn-outline w-full">{t("nav.loginByEmail")}</Link>
             )}
           </div>
         </aside>
@@ -107,8 +111,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <header className={cn("mb-3 flex items-center justify-between md:hidden", isChat && "hidden")}>
             <Link href="/" className="flex items-center gap-2"><Logo size={28} /><Wordmark compact /></Link>
             <div className="flex items-center gap-0.5">
-              <button onClick={palette.open} className="btn btn-ghost btn-icon" aria-label="Поиск"><Search size={21} /></button>
+              <button onClick={palette.open} className="btn btn-ghost btn-icon" aria-label={t("nav.search")}><Search size={21} /></button>
               <SoundToggle />
+              <LangToggle compact />
               <ThemeToggle compact />
             </div>
           </header>
@@ -155,17 +160,18 @@ function NavLink({ href, active, icon: Icon, badge, children }: { href: string; 
   );
 }
 
-/** Переключатель темы: сегментный контрол «Күн | Түн». */
+/** Переключатель темы: сегментный контрол «День | Ночь» (по-казахски «Күн | Түн», по-английски «Day | Night»). */
 export function ThemeToggle({ compact }: { compact?: boolean }) {
+  const { t } = useT();
   const { theme, setTheme, toggle } = useTheme();
   const dark = theme === "dark";
   if (compact) {
-    return <button onClick={toggle} className="btn btn-ghost btn-icon" aria-label="Переключить тему">{dark ? <Sun size={21} /> : <Moon size={21} />}</button>;
+    return <button onClick={toggle} className="btn btn-ghost btn-icon" aria-label={t("nav.themeToggle")}>{dark ? <Sun size={21} /> : <Moon size={21} />}</button>;
   }
   return (
-    <div className="seg w-full" role="radiogroup" aria-label="Тема">
-      <button role="radio" aria-checked={!dark} onClick={() => setTheme("light")} className={cn("flex flex-1 items-center justify-center gap-1.5", !dark && "seg-on")}><Sun size={15} /> Күн</button>
-      <button role="radio" aria-checked={dark} onClick={() => setTheme("dark")} className={cn("flex flex-1 items-center justify-center gap-1.5", dark && "seg-on")}><Moon size={15} /> Түн</button>
+    <div className="seg w-full" role="radiogroup" aria-label={t("nav.theme")}>
+      <button role="radio" aria-checked={!dark} onClick={() => setTheme("light")} className={cn("flex flex-1 items-center justify-center gap-1.5", !dark && "seg-on")}><Sun size={15} /> {t("nav.theme.light")}</button>
+      <button role="radio" aria-checked={dark} onClick={() => setTheme("dark")} className={cn("flex flex-1 items-center justify-center gap-1.5", dark && "seg-on")}><Moon size={15} /> {t("nav.theme.dark")}</button>
     </div>
   );
 }
@@ -182,15 +188,17 @@ export function Wordmark({ compact }: { compact?: boolean }) {
 
 /** Звук уведомлений: вкл/выкл, хранится в localStorage. */
 export function SoundToggle() {
+  const { t } = useT();
   const on = useSyncExternalStore(subscribeSound, soundEnabled, () => true);
   return (
-    <button onClick={() => setSoundEnabled(!on)} className={cn("btn btn-ghost btn-icon shrink-0", !on && "text-muted")} aria-label={on ? "Выключить звук уведомлений" : "Включить звук уведомлений"} title={on ? "Звук уведомлений включён" : "Звук уведомлений выключен"}>
+    <button onClick={() => setSoundEnabled(!on)} className={cn("btn btn-ghost btn-icon shrink-0", !on && "text-muted")} aria-label={on ? t("nav.soundDisable") : t("nav.soundEnable")} title={on ? t("nav.soundOn") : t("nav.soundOff")}>
       {on ? <Volume2 size={19} /> : <VolumeX size={19} />}
     </button>
   );
 }
 
 function BannedLogout() {
+  const { t } = useT();
   const logout = useLogout();
-  return <button onClick={() => logout.mutate()} className="btn btn-outline mt-5">Выйти из аккаунта</button>;
+  return <button onClick={() => logout.mutate()} className="btn btn-outline mt-5">{t("nav.logout")}</button>;
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { currentLocale, translate } from "@/lib/i18n";
+
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/format";
 
@@ -50,5 +52,5 @@ export function useErrorToast() {
   const toast = useToast();
   const ref = useRef(toast);
   useEffect(() => { ref.current = toast; }, [toast]);
-  return useCallback((e: unknown) => ref.current(e instanceof Error ? e.message : "Что-то пошло не так", "error"), []);
+  return useCallback((e: unknown) => ref.current(e instanceof Error ? e.message : translate(currentLocale(), "common.error"), "error"), []);
 }

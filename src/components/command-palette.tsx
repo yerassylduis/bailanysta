@@ -8,6 +8,7 @@ import { api } from "@/lib/api-client";
 import { useMe } from "@/hooks/use-data";
 import { useTheme } from "./providers";
 import { Avatar } from "./ui";
+import { useT } from "./locale-provider";
 import { cn } from "@/lib/format";
 
 /**
@@ -39,6 +40,7 @@ function PaletteDialog({ state }: { state: ReturnType<typeof useCommandPalette> 
   const router = useRouter();
   const { toggle, theme } = useTheme();
   const { data } = useMe();
+  const { t } = useT();
   const me = data?.user;
   const [q, setQRaw] = useState("");
   const [idx, setIdx] = useState(0);
@@ -51,36 +53,36 @@ function PaletteDialog({ state }: { state: ReturnType<typeof useCommandPalette> 
 
   const items = useMemo<Item[]>(() => {
     const base: Item[] = [
-      { id: "home", label: "Лента", icon: <Home size={16} />, run: () => go("/") },
-      { id: "explore", label: "Созвездие связей", icon: <Compass size={16} />, run: () => go("/explore") },
+      { id: "home", label: t("nav.feed"), icon: <Home size={16} />, run: () => go("/") },
+      { id: "explore", label: t("palette.explore"), icon: <Compass size={16} />, run: () => go("/explore") },
       ...(me ? [
-        { id: "compose", label: "Написать пост", hint: "N", icon: <PenLine size={16} />, run: () => go("/?compose=1") },
-        { id: "notif", label: "Уведомления", icon: <Bell size={16} />, run: () => go("/notifications") },
-        { id: "msgs", label: "Сообщения", icon: <MessageCircle size={16} />, run: () => go("/messages") },
-        { id: "calls", label: "Байланыс · созвоны", icon: <Video size={16} />, run: () => go("/calls") },
-        { id: "bm", label: "Закладки", icon: <Bookmark size={16} />, run: () => go("/bookmarks") },
-        { id: "me", label: "Мой профиль", hint: `@${me.handle}`, icon: <UserRound size={16} />, run: () => go(`/u/${me.handle}`) },
-        ...(me.isAdmin ? [{ id: "admin", label: "Админ-панель", icon: <ShieldCheck size={16} />, run: () => go("/admin") }] : []),
-      ] : [{ id: "login", label: "Войти", icon: <UserRound size={16} />, run: () => go("/login") }]),
-      { id: "theme", label: theme === "dark" ? "Светлая тема · Күн" : "Тёмная тема · Түн", icon: <Moon size={16} />, run: () => { toggle(); state.close(); } },
+        { id: "compose", label: t("palette.compose"), hint: "N", icon: <PenLine size={16} />, run: () => go("/?compose=1") },
+        { id: "notif", label: t("nav.notifications"), icon: <Bell size={16} />, run: () => go("/notifications") },
+        { id: "msgs", label: t("nav.messages"), icon: <MessageCircle size={16} />, run: () => go("/messages") },
+        { id: "calls", label: t("palette.calls"), icon: <Video size={16} />, run: () => go("/calls") },
+        { id: "bm", label: t("nav.bookmarks"), icon: <Bookmark size={16} />, run: () => go("/bookmarks") },
+        { id: "me", label: t("palette.me"), hint: `@${me.handle}`, icon: <UserRound size={16} />, run: () => go(`/u/${me.handle}`) },
+        ...(me.isAdmin ? [{ id: "admin", label: t("palette.admin"), icon: <ShieldCheck size={16} />, run: () => go("/admin") }] : []),
+      ] : [{ id: "login", label: t("nav.login"), icon: <UserRound size={16} />, run: () => go("/login") }]),
+      { id: "theme", label: theme === "dark" ? t("palette.themeLight", { name: t("nav.theme.light") }) : t("palette.themeDark", { name: t("nav.theme.dark") }), icon: <Moon size={16} />, run: () => { toggle(); state.close(); } },
     ];
     const qq = q.trim();
     if (!qq) return base;
     const res: Item[] = [];
-    res.push({ id: "search", label: `Искать «${qq}»`, hint: "все посты", icon: <Search size={16} />, run: () => go(`/search?q=${encodeURIComponent(qq)}`) });
-    if (qq.startsWith("#")) res.push({ id: "tag", label: `Тег ${qq}`, icon: <Hash size={16} />, run: () => go(`/search?q=${encodeURIComponent(qq)}`) });
+    res.push({ id: "search", label: t("palette.searchFor", { q: qq }), hint: t("palette.allPosts"), icon: <Search size={16} />, run: () => go(`/search?q=${encodeURIComponent(qq)}`) });
+    if (qq.startsWith("#")) res.push({ id: "tag", label: t("palette.tag", { q: qq }), icon: <Hash size={16} />, run: () => go(`/search?q=${encodeURIComponent(qq)}`) });
     for (const u of users.data?.items ?? []) res.push({ id: `u-${u.id}`, label: u.name, hint: `@${u.handle}`, icon: <Avatar user={u} size={20} />, run: () => go(`/u/${u.handle}`) });
     for (const p of posts.data?.items ?? []) res.push({ id: `p-${p.id}`, label: p.text.slice(0, 70), hint: `@${p.author.handle}`, icon: <Search size={16} className="text-muted" />, run: () => go(`/post/${p.id}`) });
     for (const b of base) if (b.label.toLowerCase().includes(qq.toLowerCase())) res.push(b);
     return res;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, me, theme, users.data, posts.data]);
+  }, [q, me, theme, users.data, posts.data, t]);
 
   const cur = Math.min(idx, Math.max(items.length - 1, 0));
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-[12vh] backdrop-blur-sm" onClick={state.close}>
-      <div className="card fade-in w-full max-w-lg overflow-hidden" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Командная палитра">
+      <div className="card fade-in w-full max-w-lg overflow-hidden" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t("palette.aria")}>
         <div className="flex items-center gap-3 border-b border-line px-4 py-3">
           <Search size={18} className="text-muted" />
           <input
@@ -90,7 +92,7 @@ function PaletteDialog({ state }: { state: ReturnType<typeof useCommandPalette> 
               if (e.key === "ArrowUp") { e.preventDefault(); setIdx(Math.max(cur - 1, 0)); }
               if (e.key === "Enter") { e.preventDefault(); items[cur]?.run(); }
             }}
-            placeholder="Куда идём? Люди, #теги, посты…" className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted" />
+            placeholder={t("palette.placeholder")} className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted" />
           <kbd className="rounded-md border border-line px-1.5 py-0.5 text-[10px] text-muted">esc</kbd>
         </div>
         <ul className="max-h-[50vh] overflow-y-auto p-2">
@@ -104,7 +106,7 @@ function PaletteDialog({ state }: { state: ReturnType<typeof useCommandPalette> 
               </button>
             </li>
           ))}
-          {!items.length && <li className="px-3 py-6 text-center text-sm text-muted">Ничего не нашлось</li>}
+          {!items.length && <li className="px-3 py-6 text-center text-sm text-muted">{t("palette.nothing")}</li>}
         </ul>
       </div>
     </div>
