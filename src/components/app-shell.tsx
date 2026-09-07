@@ -38,7 +38,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const mobileItems = items.filter((i) => i.href !== "/bookmarks");
 
   return (
-    <div className="ornament min-h-full">
+    <div className="min-h-full">
       <div className="mx-auto flex min-h-screen w-full max-w-7xl gap-5 px-3 sm:px-5 lg:gap-6">
         {/* Левая навигация */}
         <aside className="sticky top-0 hidden h-screen w-52 shrink-0 flex-col overflow-y-auto py-5 no-scrollbar md:flex lg:w-60">
