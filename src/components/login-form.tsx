@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, ArrowLeft, Mail, Phone, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, ArrowLeft, ShieldCheck, Sparkles } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { HANDLE_RE, hueFromHandle } from "@/lib/text";
 import { cn } from "@/lib/format";
@@ -24,7 +24,7 @@ type Step = "form" | "code";
 
 /**
  * Вход и регистрация по одноразовому коду.
- * Вход: телефон или почта → код. Регистрация: ник, имя, телефон, почта, день рождения (все обязательны) → код.
+ * Вход: почта → код. Регистрация: ник, имя, телефон, почта, день рождения (все обязательны) → код на почту.
  * Демо-аккаунты для проверяющих — одним нажатием, без кода.
  */
 export function LoginForm() {
@@ -39,7 +39,6 @@ export function LoginForm() {
   const [target, setTarget] = useState("");
   // регистрация
   const [reg, setReg] = useState({ handle: "", name: "", phone: "", email: "", birthday: "" });
-  const [via, setVia] = useState<"sms" | "email">("email");
   const [errors, setErrors] = useState<Record<string, string>>({});
   // шаг с кодом
   const [sentTo, setSentTo] = useState<{ target: string; channel: "sms" | "email"; demoCode?: string; expiresInSec: number } | null>(null);
@@ -69,10 +68,10 @@ export function LoginForm() {
     try {
       const res = mode === "login"
         ? await api.otpRequest({ target: target.trim() })
-        : await api.otpRequest({ register: { ...reg, handle: reg.handle.toLowerCase().trim(), name: reg.name.trim(), phone: reg.phone.trim(), email: reg.email.trim() }, via });
+        : await api.otpRequest({ register: { ...reg, handle: reg.handle.toLowerCase().trim(), name: reg.name.trim(), phone: reg.phone.trim(), email: reg.email.trim() } });
       setSentTo({ target: res.target, channel: res.channel, demoCode: res.code, expiresInSec: res.expiresInSec });
       setCode(""); setLeft(30); setStep("code");
-      toast(res.delivery === "sent" ? (res.channel === "sms" ? "SMS с кодом отправлено" : "Письмо с кодом отправлено") : "Код показан на экране (демо-режим)", "success");
+      toast(res.delivery === "sent" ? "Письмо с кодом отправлено" : "Код показан на экране (демо-режим)", "success");
       setTimeout(() => codeRef.current?.focus(), 50);
     } catch (e) { toast(e instanceof Error ? e.message : "Не удалось отправить код", "error"); }
     finally { setBusy(false); }
@@ -100,7 +99,7 @@ export function LoginForm() {
   return (
     <div className="mx-auto max-w-md pt-4 sm:pt-12">
       <div className="card fade-in p-6 sm:p-8">
-        <div className="mb-5 flex items-center gap-3"><Logo size={36} /><div><h1 className="font-display text-2xl font-bold">{step === "code" ? "Введите код" : mode === "login" ? "Войти" : "Регистрация"}</h1><p className="text-sm text-muted">{step === "code" ? "Мы отправили одноразовый код" : mode === "login" ? "Код придёт на телефон или почту" : "Все поля обязательны"}</p></div></div>
+        <div className="mb-5 flex items-center gap-3"><Logo size={36} /><div><h1 className="font-display text-2xl font-bold">{step === "code" ? "Введите код" : mode === "login" ? "Войти" : "Регистрация"}</h1><p className="text-sm text-muted">{step === "code" ? "Мы отправили одноразовый код на почту" : mode === "login" ? "Код придёт на вашу почту" : "Все поля обязательны, код придёт на почту"}</p></div></div>
 
         {step === "form" && (
           <div className="seg mb-5 w-full">
@@ -111,8 +110,8 @@ export function LoginForm() {
 
         {step === "form" && mode === "login" && (
           <form onSubmit={(e) => { e.preventDefault(); if (target.trim()) requestCode(); }} className="space-y-3">
-            <Field id="target" label="Телефон или почта">
-              <input id="target" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="+7 701 000 00 00 или you@mail.kz" className="input" autoFocus autoComplete="username" inputMode="email" />
+            <Field id="target" label="Почта">
+              <input id="target" type="email" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="you@mail.kz" className="input" autoFocus autoComplete="email" inputMode="email" />
             </Field>
             <button type="submit" disabled={!target.trim() || busy} className="btn btn-primary w-full py-3">{busy ? "Отправляем…" : <>Получить код <ArrowRight size={16} /></>}</button>
             <p className="text-center text-xs text-muted">Нет аккаунта? <button type="button" onClick={() => setMode("register")} className="link-tag">Зарегистрируйтесь</button></p>
@@ -139,13 +138,6 @@ export function LoginForm() {
             <Field id="birthday" label="Дата рождения" error={errors.birthday}>
               <input id="birthday" type="date" value={reg.birthday} onChange={(e) => setReg({ ...reg, birthday: e.target.value })} className="input" max={MAX_BIRTHDAY} autoComplete="bday" />
             </Field>
-            <div>
-              <span className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted">Куда отправить код</span>
-              <div className="seg w-full">
-                <button type="button" onClick={() => setVia("email")} className={cn("flex flex-1 items-center justify-center gap-1.5", via === "email" && "seg-on")}><Mail size={14} /> На почту</button>
-                <button type="button" onClick={() => setVia("sms")} className={cn("flex flex-1 items-center justify-center gap-1.5", via === "sms" && "seg-on")}><Phone size={14} /> В SMS</button>
-              </div>
-            </div>
             <button type="submit" disabled={busy} className="btn btn-primary w-full py-3">{busy ? "Отправляем…" : <>Получить код <ArrowRight size={16} /></>}</button>
             <p className="text-center text-xs text-muted">Уже есть аккаунт? <button type="button" onClick={() => setMode("login")} className="link-tag">Войти</button></p>
           </form>
@@ -153,11 +145,11 @@ export function LoginForm() {
 
         {step === "code" && sentTo && (
           <form onSubmit={(e) => { e.preventDefault(); verify(); }} className="space-y-4">
-            <p className="text-sm text-ink-2">Код отправлен {sentTo.channel === "sms" ? "в SMS на" : "на почту"} <b>{sentTo.target}</b>. Действует {Math.round(sentTo.expiresInSec / 60)} минут.</p>
+            <p className="text-sm text-ink-2">Код отправлен на почту <b>{sentTo.target}</b>. Действует {Math.round(sentTo.expiresInSec / 60)} минут. Не пришло — проверьте «Спам».</p>
             {sentTo.demoCode && (
               <div className="rounded-xl border border-saffron/40 bg-saffron-soft p-3 text-sm">
                 <p className="flex items-center gap-2 font-semibold"><Sparkles size={14} className="text-saffron" /> Демо-режим: отправка не настроена</p>
-                <p className="mt-1 text-ink-2">Провайдер {sentTo.channel === "sms" ? "SMS" : "почты"} не подключён, поэтому код показан здесь: <b className="font-mono text-lg tracking-widest">{sentTo.demoCode}</b></p>
+                <p className="mt-1 text-ink-2">Отправка почты не подключена, поэтому код показан здесь: <b className="font-mono text-lg tracking-widest">{sentTo.demoCode}</b></p>
               </div>
             )}
             <input ref={codeRef} value={code} onChange={(e) => { const v = e.target.value.replace(/\D/g, "").slice(0, 6); setCode(v); if (v.length === 6) verify(v); }}
@@ -184,7 +176,7 @@ export function LoginForm() {
           </>
         )}
       </div>
-      <p className="mt-4 px-2 text-center text-xs text-muted">Пароля нет: вход подтверждается одноразовым кодом. Код живёт 10 минут, 5 попыток, повтор через 30 секунд.</p>
+      <p className="mt-4 px-2 text-center text-xs text-muted">Пароля нет: вход подтверждается одноразовым кодом из письма. Код живёт 10 минут, 5 попыток, повтор через 30 секунд.</p>
     </div>
   );
 }

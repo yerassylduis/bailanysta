@@ -9,8 +9,8 @@ import { issueCode, normalizeTarget } from "@/lib/otp";
 
 /**
  * POST /api/auth/otp/request
- *  - вход:        { target }                       — телефон или почта существующего аккаунта
- *  - регистрация: { register: {handle,name,phone,email,birthday}, via: "sms"|"email" }
+ *  - вход:        { target }                       — почта существующего аккаунта
+ *  - регистрация: { register: {handle,name,phone,email,birthday} } — код уходит на почту
  * Отвечает { delivery: "sent" | "screen", code?, target, channel } — code только в демо-режиме без провайдера.
  */
 const Register = z.object({
@@ -20,7 +20,7 @@ const Register = z.object({
   email: z.string().trim().min(5, "Введите почту"),
   birthday: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Дата рождения в формате ГГГГ-ММ-ДД"),
 });
-const Body = z.object({ target: z.string().trim().optional(), register: Register.optional(), via: z.enum(["sms", "email"]).optional() });
+const Body = z.object({ target: z.string().trim().optional(), register: Register.optional() });
 
 export const POST = handler(async (req) => {
   const body = await parseBody(req, Body);
@@ -38,17 +38,15 @@ export const POST = handler(async (req) => {
     if (clash.some((u) => u.handle === r.handle)) throw new HttpError(409, "Этот ник уже занят");
     if (clash.some((u) => u.phone === phone.target)) throw new HttpError(409, "Этот телефон уже зарегистрирован — войдите по нему");
     if (clash.some((u) => u.email === email.target)) throw new HttpError(409, "Эта почта уже зарегистрирована — войдите по ней");
-    const via = body.via ?? "email";
-    const t = via === "sms" ? phone : email;
-    const res = await issueCode(t.target, t.channel, "register", { handle: r.handle, name: r.name, phone: phone.target, email: email.target, birthday: r.birthday });
-    return ok({ ...res, target: t.target, channel: t.channel });
+    const res = await issueCode(email.target, "email", "register", { handle: r.handle, name: r.name, phone: phone.target, email: email.target, birthday: r.birthday });
+    return ok({ ...res, target: email.target, channel: "email" });
   }
 
-  if (!body.target) throw new HttpError(400, "Введите телефон или почту");
+  if (!body.target) throw new HttpError(400, "Введите почту");
   const t = normalizeTarget(body.target);
-  const [user] = await db.select({ id: schema.users.id }).from(schema.users)
-    .where(t.channel === "sms" ? eq(schema.users.phone, t.target) : eq(schema.users.email, t.target)).limit(1);
-  if (!user) throw new HttpError(404, "Аккаунт с такими данными не найден. Зарегистрируйтесь");
+  if (t.channel !== "email") throw new HttpError(400, "Вход по почте: введите адрес электронной почты");
+  const [user] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, t.target)).limit(1);
+  if (!user) throw new HttpError(404, "Аккаунт с такой почтой не найден. Зарегистрируйтесь");
   const res = await issueCode(t.target, t.channel, "login");
   return ok({ ...res, target: t.target, channel: t.channel });
 });

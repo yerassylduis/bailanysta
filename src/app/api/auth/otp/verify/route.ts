@@ -15,6 +15,7 @@ import type { User } from "@/db/schema";
 export const POST = handler(async (req) => {
   const { target: raw, code } = await parseBody(req, z.object({ target: z.string().trim(), code: z.string().trim().regex(/^\d{6}$/, "Код — 6 цифр") }));
   const { target, channel } = normalizeTarget(raw);
+  if (channel !== "email") throw new HttpError(400, "Вход по почте: введите адрес электронной почты");
   const result = await verifyCode(target, code);
   const db = await getDb();
   let user: User | undefined;
@@ -29,7 +30,7 @@ export const POST = handler(async (req) => {
     await db.insert(schema.users).values(user);
     created = true;
   } else {
-    [user] = await db.select().from(schema.users).where(channel === "sms" ? eq(schema.users.phone, target) : eq(schema.users.email, target)).limit(1);
+    [user] = await db.select().from(schema.users).where(eq(schema.users.email, target)).limit(1);
     if (!user) throw new HttpError(404, "Аккаунт не найден");
   }
   await ensureWelcome(user);

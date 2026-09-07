@@ -39,7 +39,7 @@ export const api = {
   /** Быстрый вход по нику — только демо-аккаунты */
   login: (handle: string) => request<{ user: UserDto; created: boolean }>("/api/auth/login", { method: "POST", body: JSON.stringify({ handle }) }),
   /** Код для входа (target) или регистрации (register + via) */
-  otpRequest: (body: { target?: string; register?: { handle: string; name: string; phone: string; email: string; birthday: string }; via?: "sms" | "email" }) =>
+  otpRequest: (body: { target?: string; register?: { handle: string; name: string; phone: string; email: string; birthday: string } }) =>
     request<{ delivery: "sent" | "screen"; code?: string; expiresInSec: number; target: string; channel: "sms" | "email" }>("/api/auth/otp/request", { method: "POST", body: JSON.stringify(body) }),
   otpVerify: (target: string, code: string) => request<{ user: MeDto; created: boolean }>("/api/auth/otp/verify", { method: "POST", body: JSON.stringify({ target, code }) }),
   logout: () => request<{ ok: true }>("/api/auth/logout", { method: "POST" }),
