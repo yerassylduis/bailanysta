@@ -72,7 +72,6 @@ export function Profile({ handle }: { handle: string }) {
       <section className="card fade-in relative overflow-hidden">
         <div className="relative h-32 w-full sm:h-40" style={coverStyle(p.cover, p.hue)}>
           {edit && (
-            {/* Управление обложкой — справа сверху, чтобы не накладываться на аватар в левом нижнем углу */}
             <div className="absolute right-3 top-3 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center justify-end gap-2">
               <div className="flex gap-1.5 rounded-full bg-black/35 p-1 backdrop-blur">
                 {COVER_GRADIENTS.map((g, i) => (
