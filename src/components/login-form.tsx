@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, ArrowLeft, Mail, Phone, ShieldCheck, Sparkles } from "lucide-react";
@@ -15,6 +15,9 @@ const DEMO = [
   { handle: "daniyar", name: "Данияр Ахмет" },
   { handle: "tomiris", name: "Томирис Сейт" },
 ];
+
+/** Верхняя граница даты рождения — «не младше 13 лет»; считается один раз при загрузке модуля. */
+const MAX_BIRTHDAY = new Date(Date.now() - 13 * 365.25 * 86400_000).toISOString().slice(0, 10);
 
 type Mode = "login" | "register";
 type Step = "form" | "code";
@@ -43,8 +46,6 @@ export function LoginForm() {
   const [code, setCode] = useState("");
   const [left, setLeft] = useState(0);
   const codeRef = useRef<HTMLInputElement>(null);
-  // верхняя граница даты рождения — «не младше 13 лет»
-  const maxBirthday = useMemo(() => new Date(Date.now() - 13 * 365.25 * 86400_000).toISOString().slice(0, 10), []);
 
   useEffect(() => {
     if (!left) return;
@@ -136,7 +137,7 @@ export function LoginForm() {
               <input id="email" value={reg.email} onChange={(e) => setReg({ ...reg, email: e.target.value })} placeholder="you@mail.kz" className="input" inputMode="email" autoComplete="email" />
             </Field>
             <Field id="birthday" label="Дата рождения" error={errors.birthday}>
-              <input id="birthday" type="date" value={reg.birthday} onChange={(e) => setReg({ ...reg, birthday: e.target.value })} className="input" max={maxBirthday} autoComplete="bday" />
+              <input id="birthday" type="date" value={reg.birthday} onChange={(e) => setReg({ ...reg, birthday: e.target.value })} className="input" max={MAX_BIRTHDAY} autoComplete="bday" />
             </Field>
             <div>
               <span className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted">Куда отправить код</span>
