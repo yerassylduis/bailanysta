@@ -143,10 +143,8 @@ export function CallRoom({ id }: { id: string }) {
         {room.anyoneRecording && <span className="flex items-center gap-1.5 rounded-full bg-rose px-2.5 py-1 text-xs font-semibold text-white"><Disc size={12} className="animate-pulse" /> Идёт запись{room.recordingBy ? ` · ${room.recordingBy}` : ""}</span>}
         <span className="ml-auto flex items-center gap-1 text-xs text-muted"><Users size={14} /> {tiles.length}</span>
         <button onClick={() => toggleFullscreen(rootRef.current)} className="btn btn-outline btn-icon h-9 w-9" aria-label={fs ? "Выйти из полноэкранного режима" : "Звонок на весь экран"} title={fs ? "Свернуть" : "На весь экран"}>{fs ? <Minimize size={16} /> : <Maximize size={16} />}</button>
-        <div className="relative">
-          <button onClick={() => setInviteOpen((o) => !o)} className="btn btn-primary px-3 py-1.5 text-xs"><UserPlus size={14} /> Пригласить</button>
-          {inviteOpen && <InvitePopover callId={id} onClose={() => setInviteOpen(false)} onCopy={copyLink} inCall={new Set(tiles.map((t) => t.user.id))} />}
-        </div>
+        <button onClick={() => setInviteOpen(true)} className="btn btn-primary px-3 py-1.5 text-xs"><UserPlus size={14} /> Пригласить</button>
+        {inviteOpen && <InvitePopover callId={id} onClose={() => setInviteOpen(false)} onCopy={copyLink} inCall={new Set(tiles.map((t) => t.user.id))} />}
       </header>
 
       <div className="flex min-h-0 flex-1 gap-3">
@@ -308,6 +306,7 @@ function Tile({ user, stream, me, muted, camOff, sharing, version, connected, st
 /** Пригласить в звонок: недавние собеседники + поиск по нику/имени; приглашение уходит уведомлением с кнопкой и сообщением со ссылкой. */
 function InvitePopover({ callId, onClose, onCopy, inCall }: { callId: string; onClose: () => void; onCopy: () => void; inCall: Set<string> }) {
   const toast = useToast();
+  useEffect(() => { const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); }, [onClose]);
   const [q, setQ] = useState("");
   const [sent, setSent] = useState<Set<string>>(new Set());
   const convs = useConversations(true);
@@ -321,8 +320,9 @@ function InvitePopover({ callId, onClose, onCopy, inCall }: { callId: string; on
   };
 
   return (
-    <div className="card absolute right-0 top-10 z-40 w-80 p-3 shadow-card" onClick={(e) => e.stopPropagation()}>
-      <div className="mb-2 flex items-center justify-between"><span className="text-sm font-semibold">Пригласить в созвон</span><button onClick={onClose} className="btn btn-ghost btn-icon h-7 w-7"><X size={14} /></button></div>
+    <div className="fixed inset-0 z-[70] flex items-start justify-center bg-black/40 p-4 pt-[10vh] backdrop-blur-sm sm:items-center sm:pt-4" onClick={onClose} role="dialog" aria-label="Пригласить в созвон">
+    <div className="card fade-in w-full max-w-sm p-4 shadow-card" onClick={(e) => e.stopPropagation()}>
+      <div className="mb-2 flex items-center justify-between"><span className="text-sm font-semibold">Пригласить в созвон</span><button onClick={onClose} className="btn btn-ghost btn-icon h-7 w-7" aria-label="Закрыть"><X size={14} /></button></div>
       <div className="relative"><Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ник или имя…" className="input py-2 pl-8 text-sm" /></div>
       <p className="mt-2 px-1 text-[11px] uppercase tracking-wider text-muted">{q.trim() ? "Найдено" : "Недавние собеседники"}</p>
       <ul className="mt-1 max-h-56 space-y-0.5 overflow-y-auto">
@@ -337,6 +337,8 @@ function InvitePopover({ callId, onClose, onCopy, inCall }: { callId: string; on
         {!list.length && <li className="px-2 py-3 text-center text-xs text-muted">{q.trim() ? "Никого не нашли" : "Начните вводить ник или имя"}</li>}
       </ul>
       <button onClick={onCopy} className="btn btn-outline mt-2 w-full py-1.5 text-xs"><Copy size={13} /> Скопировать ссылку</button>
+      <p className="mt-2 text-center text-[11px] text-muted">Приглашённому придёт уведомление и сообщение с кнопкой «Присоединиться»</p>
+    </div>
     </div>
   );
 }
