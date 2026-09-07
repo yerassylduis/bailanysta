@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Compass, Hash, Home, Moon, Search, UserRound, Bell, PenLine, MessageCircle, Bookmark } from "lucide-react";
+import { Compass, Hash, Home, Moon, Search, UserRound, Bell, PenLine, MessageCircle, Bookmark, Video } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useMe } from "@/hooks/use-data";
 import { useTheme } from "./providers";
@@ -57,6 +57,7 @@ function PaletteDialog({ state }: { state: ReturnType<typeof useCommandPalette> 
         { id: "compose", label: "Написать пост", hint: "N", icon: <PenLine size={16} />, run: () => go("/?compose=1") },
         { id: "notif", label: "Уведомления", icon: <Bell size={16} />, run: () => go("/notifications") },
         { id: "msgs", label: "Сообщения", icon: <MessageCircle size={16} />, run: () => go("/messages") },
+        { id: "calls", label: "Байланыс · созвоны", icon: <Video size={16} />, run: () => go("/calls") },
         { id: "bm", label: "Закладки", icon: <Bookmark size={16} />, run: () => go("/bookmarks") },
         { id: "me", label: "Мой профиль", hint: `@${me.handle}`, icon: <UserRound size={16} />, run: () => go(`/u/${me.handle}`) },
       ] : [{ id: "login", label: "Войти", icon: <UserRound size={16} />, run: () => go("/login") }]),

@@ -56,12 +56,17 @@ export function useRealtime(enabled: boolean, toast: (text: string, kind?: "info
     });
 
     es.addEventListener("messages", (e) => {
-      const d = JSON.parse((e as MessageEvent).data) as { items: Array<{ from: UserDto; text: string }>; unreadMessages: number };
+      const d = JSON.parse((e as MessageEvent).data) as { items: Array<{ from: UserDto; text: string; conversationId: string; group: { id: string; title: string } | null }>; unreadMessages: number };
       setCounts(undefined, d.unreadMessages);
       qc.invalidateQueries({ queryKey: keys.conversations });
       for (const m of d.items.slice(-3)) {
-        qc.invalidateQueries({ queryKey: keys.messages(m.from.handle) });
-        if (!pathRef.current.startsWith(`/messages/${m.from.handle}`)) toast(`💬 ${m.from.name}: ${m.text.slice(0, 60)}`);
+        if (m.group) {
+          qc.invalidateQueries({ queryKey: keys.groupMessages(m.group.id) });
+          if (!pathRef.current.startsWith(`/messages/g/${m.group.id}`)) toast(`👥 ${m.group.title} · ${m.from.name}: ${m.text.slice(0, 50)}`);
+        } else {
+          qc.invalidateQueries({ queryKey: keys.messages(m.from.handle) });
+          if (!pathRef.current.startsWith(`/messages/${m.from.handle}`)) toast(`💬 ${m.from.name}: ${m.text.slice(0, 60)}`);
+        }
       }
     });
 

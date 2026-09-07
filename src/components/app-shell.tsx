@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Compass, Home, LogIn, Moon, Search, Sun, UserRound, Sparkles, Command, MessageCircle, Bookmark } from "lucide-react";
+import { Bell, Compass, Home, LogIn, Moon, Search, Sun, UserRound, Sparkles, Command, MessageCircle, Bookmark, Video } from "lucide-react";
 import { useMe } from "@/hooks/use-data";
 import { useTheme } from "./providers";
 import { Avatar, Logo } from "./ui";
@@ -23,7 +23,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const unread = data?.unread ?? 0;
   const unreadMsgs = data?.unreadMessages ?? 0;
   const palette = useCommandPalette();
-  const isChat = /^\/messages\/.+/.test(pathname);
+  const isChat = /^\/messages\/.+/.test(pathname) || /^\/calls\/.+/.test(pathname);
   const toast = useToast();
   useRealtime(!!me, toast); // живые уведомления и сообщения без перезагрузки
 
@@ -32,6 +32,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     { href: "/explore", label: "Созвездие", icon: Compass, badge: 0, match: (p: string) => p.startsWith("/explore") || p.startsWith("/search") },
     ...(me ? [
       { href: "/messages", label: "Сообщения", icon: MessageCircle, badge: unreadMsgs, match: (p: string) => p.startsWith("/messages") },
+      { href: "/calls", label: "Байланыс", icon: Video, badge: 0, match: (p: string) => p.startsWith("/calls") },
       { href: "/notifications", label: "Уведомления", icon: Bell, badge: unread, match: (p: string) => p.startsWith("/notifications") },
       { href: "/bookmarks", label: "Закладки", icon: Bookmark, badge: 0, match: (p: string) => p.startsWith("/bookmarks") },
     ] : []),
@@ -39,7 +40,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       ? { href: `/u/${me.handle}`, label: "Профиль", icon: UserRound, badge: 0, match: (p: string) => p === `/u/${me.handle}` }
       : { href: "/login", label: "Войти", icon: LogIn, badge: 0, match: (p: string) => p.startsWith("/login") },
   ];
-  const mobileItems = items.filter((i) => i.href !== "/bookmarks");
+  const mobileItems = items.filter((i) => i.href !== "/bookmarks" && i.href !== "/calls");
 
   return (
     <div className="min-h-full">

@@ -98,10 +98,45 @@ export const DDL: string[] = [
     id TEXT PRIMARY KEY,
     user_a TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     user_b TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    is_group INTEGER NOT NULL DEFAULT 0,
+    title TEXT,
+    owner_id TEXT,
     last_message_at TEXT NOT NULL,
     created_at TEXT NOT NULL
   )`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS conv_pair_idx ON conversations(user_a, user_b)`,
+  `CREATE INDEX IF NOT EXISTS conv_pair_idx ON conversations(user_a, user_b)`,
+  `CREATE TABLE IF NOT EXISTS conversation_members (
+    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    joined_at TEXT NOT NULL,
+    PRIMARY KEY (conversation_id, user_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS conv_members_user_idx ON conversation_members(user_id)`,
+  `CREATE TABLE IF NOT EXISTS calls (
+    id TEXT PRIMARY KEY,
+    host_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    ended_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS call_participants (
+    call_id TEXT NOT NULL REFERENCES calls(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    joined_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    left_at TEXT,
+    PRIMARY KEY (call_id, user_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS call_signals (
+    id TEXT PRIMARY KEY,
+    call_id TEXT NOT NULL REFERENCES calls(id) ON DELETE CASCADE,
+    from_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    to_id TEXT,
+    type TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS call_signals_call_idx ON call_signals(call_id, created_at)`,
   `CREATE TABLE IF NOT EXISTS messages (
     id TEXT PRIMARY KEY,
     conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
@@ -128,6 +163,12 @@ export const SOFT_MIGRATIONS: string[] = [
   `ALTER TABLE users ADD COLUMN avatar_url TEXT`,
   `ALTER TABLE users ADD COLUMN cover TEXT`,
   `ALTER TABLE comments ADD COLUMN parent_id TEXT`,
+  `ALTER TABLE conversations ADD COLUMN is_group INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE conversations ADD COLUMN title TEXT`,
+  `ALTER TABLE conversations ADD COLUMN owner_id TEXT`,
+  // в старых базах индекс пары был UNIQUE — группам это мешает (владелец = user_a = user_b)
+  `DROP INDEX IF EXISTS conv_pair_idx`,
+  `CREATE INDEX IF NOT EXISTS conv_pair_idx ON conversations(user_a, user_b)`,
   // индексы на добавленные колонки — только после ALTER
   `CREATE INDEX IF NOT EXISTS posts_repost_idx ON posts(repost_of_id)`,
 ];

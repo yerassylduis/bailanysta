@@ -49,8 +49,14 @@ export type PostDto = {
 
 export type ConversationDto = {
   id: string;
-  peer: UserDto;
-  lastMessage: { text: string; hasMedia: boolean; mine: boolean; createdAt: string } | null;
+  kind: "dm" | "group";
+  /** Собеседник — для личного диалога */
+  peer: UserDto | null;
+  /** Название и участники — для группы */
+  title: string | null;
+  members: UserDto[];
+  ownerId: string | null;
+  lastMessage: { text: string; hasMedia: boolean; mine: boolean; createdAt: string; fromName?: string } | null;
   unread: number;
 };
 
@@ -59,6 +65,29 @@ export type MessageDto = {
   text: string;
   media: MediaDto | null;
   mine: boolean;
+  createdAt: string;
+  /** Автор — нужен в группах */
+  from: UserDto;
+};
+
+/* --------------------------------- звонки -------------------------------- */
+
+export type CallDto = {
+  id: string;
+  title: string;
+  host: UserDto;
+  createdAt: string;
+  endedAt: string | null;
+  participants: Array<UserDto & { joinedAt: string; online: boolean }>;
+};
+
+export type SignalType = "join" | "leave" | "offer" | "answer" | "ice" | "chat" | "state";
+export type SignalDto = {
+  id: string;
+  type: SignalType;
+  from: UserDto;
+  to: string | null;
+  payload: unknown;
   createdAt: string;
 };
 

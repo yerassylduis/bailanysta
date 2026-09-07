@@ -1,4 +1,4 @@
-import type { CommentDto, ConversationDto, GraphDto, MediaDto, MessageDto, MuseRequest, MuseResponse, NotificationDto, Page, PostDto, TrendingTag, UserDto, UserProfileDto } from "./types";
+import type { CallDto, CommentDto, ConversationDto, GraphDto, MediaDto, MessageDto, MuseRequest, MuseResponse, NotificationDto, Page, PostDto, SignalDto, SignalType, TrendingTag, UserDto, UserProfileDto } from "./types";
 
 /** Тонкий типизированный клиент к собственному API. Единственная точка fetch на клиенте. */
 
@@ -73,6 +73,18 @@ export const api = {
   conversations: () => request<{ items: ConversationDto[] }>("/api/messages"),
   messages: (handle: string, after?: string) => request<{ peer: UserDto; items: MessageDto[] }>(`/api/messages/${handle}${qs({ after })}`),
   sendMessage: (handle: string, body: { text?: string; mediaId?: string }) => request<MessageDto>(`/api/messages/${handle}`, { method: "POST", body: JSON.stringify(body) }),
+  createGroup: (title: string, handles: string[]) => request<ConversationDto>("/api/messages/groups", { method: "POST", body: JSON.stringify({ title, handles }) }),
+  groupMessages: (id: string, after?: string) => request<{ conversation: ConversationDto; items: MessageDto[] }>(`/api/messages/c/${id}${qs({ after })}`),
+  sendGroupMessage: (id: string, body: { text?: string; mediaId?: string }) => request<MessageDto>(`/api/messages/c/${id}`, { method: "POST", body: JSON.stringify(body) }),
+  addGroupMember: (id: string, handle: string) => request<ConversationDto>(`/api/messages/c/${id}/members`, { method: "POST", body: JSON.stringify({ handle }) }),
+  leaveGroup: (id: string) => request<{ ok: true }>(`/api/messages/c/${id}/leave`, { method: "POST" }),
+
+  calls: () => request<{ items: CallDto[] }>("/api/calls"),
+  createCall: (title?: string) => request<CallDto>("/api/calls", { method: "POST", body: JSON.stringify({ title }) }),
+  call: (id: string) => request<{ call: CallDto; chat: SignalDto[] }>(`/api/calls/${id}`),
+  joinCall: (id: string) => request<CallDto>(`/api/calls/${id}/join`, { method: "POST" }),
+  leaveCall: (id: string) => request<{ ok: true }>(`/api/calls/${id}/leave`, { method: "POST" }),
+  signal: (id: string, type: SignalType, to: string | null, payload: unknown) => request<{ id: string; createdAt: string }>(`/api/calls/${id}/signal`, { method: "POST", body: JSON.stringify({ type, to, payload }) }),
   deletePost: (id: string) => request<{ ok: true }>(`/api/posts/${id}`, { method: "DELETE" }),
   like: (id: string, liked: boolean) => request<{ likeCount: number; likedByViewer: boolean }>(`/api/posts/${id}/like`, { method: "PUT", body: JSON.stringify({ liked }) }),
 

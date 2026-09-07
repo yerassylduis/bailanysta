@@ -21,6 +21,8 @@ export const keys = {
   graph: ["graph"] as const,
   conversations: ["conversations"] as const,
   messages: (h: string) => ["messages", h] as const,
+  groupMessages: (id: string) => ["group-messages", id] as const,
+  calls: ["calls"] as const,
 };
 
 export function useMe() {
@@ -186,6 +188,32 @@ export function useLikeComment(postId: string) {
     onSuccess: (res, { id }) => patch(id, (c) => ({ ...c, ...res })),
     onError: (_e, { id, liked }) => patch(id, (c) => ({ ...c, likedByViewer: !liked, likeCount: c.likeCount + (liked ? -1 : 1) })),
   });
+}
+
+export function useGroupMessages(id: string, enabled: boolean) {
+  return useQuery({ queryKey: keys.groupMessages(id), queryFn: () => api.groupMessages(id), enabled, refetchInterval: 3_000 });
+}
+
+export function useSendGroupMessage(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { text?: string; mediaId?: string }) => api.sendGroupMessage(id, body),
+    onSuccess: (m: MessageDto) => {
+      qc.setQueryData<Awaited<ReturnType<typeof api.groupMessages>>>(keys.groupMessages(id), (d) => (d ? { ...d, items: [...d.items, m] } : d));
+      qc.invalidateQueries({ queryKey: keys.conversations });
+    },
+  });
+}
+
+export function useCreateGroup() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: ({ title, handles }: { title: string; handles: string[] }) => api.createGroup(title, handles), onSuccess: () => qc.invalidateQueries({ queryKey: keys.conversations }) });
+}
+
+export const useCalls = (enabled: boolean) => useQuery({ queryKey: keys.calls, queryFn: api.calls, enabled, refetchInterval: 15_000 });
+export function useCreateCall() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (title?: string) => api.createCall(title), onSuccess: () => qc.invalidateQueries({ queryKey: keys.calls }) });
 }
 
 export function useProfile(handle: string) {

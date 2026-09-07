@@ -68,17 +68,71 @@ export const bookmarks = sqliteTable(
   (t) => [primaryKey({ columns: [t.userId, t.postId] })],
 );
 
-/** Личные сообщения: диалог двух людей (userA < userB лексикографически, чтобы пара была уникальной). */
+/**
+ * Диалоги. Личный: userA < userB (пара уникальна). Групповой: isGroup=1, title, ownerId,
+ * участники — в conversation_members (userA/userB дублируют владельца, чтобы не ломать старые запросы).
+ */
 export const conversations = sqliteTable(
   "conversations",
   {
     id: text("id").primaryKey(),
     userA: text("user_a").notNull().references(() => users.id, { onDelete: "cascade" }),
     userB: text("user_b").notNull().references(() => users.id, { onDelete: "cascade" }),
+    isGroup: integer("is_group").notNull().default(0),
+    title: text("title"),
+    ownerId: text("owner_id"),
     lastMessageAt: text("last_message_at").notNull(),
     createdAt: text("created_at").notNull(),
   },
   (t) => [index("conv_pair_idx").on(t.userA, t.userB)],
+);
+
+export const conversationMembers = sqliteTable(
+  "conversation_members",
+  {
+    conversationId: text("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    joinedAt: text("joined_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.conversationId, t.userId] }), index("conv_members_user_idx").on(t.userId)],
+);
+
+/* ------------------------------ Звонки ---------------------------------- */
+
+/** Комната звонка «Байланыс». id — короткий код, он же в ссылке. */
+export const calls = sqliteTable("calls", {
+  id: text("id").primaryKey(),
+  hostId: text("host_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  createdAt: text("created_at").notNull(),
+  endedAt: text("ended_at"),
+});
+
+export const callParticipants = sqliteTable(
+  "call_participants",
+  {
+    callId: text("call_id").notNull().references(() => calls.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    joinedAt: text("joined_at").notNull(),
+    lastSeenAt: text("last_seen_at").notNull(),
+    leftAt: text("left_at"),
+  },
+  (t) => [primaryKey({ columns: [t.callId, t.userId] })],
+);
+
+/** Сигналы WebRTC и чат звонка: offer/answer/ice адресные (toId), join/leave/chat — всем (toId null). */
+export const callSignals = sqliteTable(
+  "call_signals",
+  {
+    id: text("id").primaryKey(),
+    callId: text("call_id").notNull().references(() => calls.id, { onDelete: "cascade" }),
+    fromId: text("from_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    toId: text("to_id"),
+    type: text("type").notNull(),
+    payload: text("payload").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("call_signals_call_idx").on(t.callId, t.createdAt)],
 );
 
 export const messages = sqliteTable(
