@@ -53,28 +53,6 @@ export function Comments({ postId, postText }: { postId: string; postText: strin
   const replies = new Map<string, CommentDto[]>();
   for (const c of items) if (c.parentId && byId.has(c.parentId)) { const r = rootOf(c); replies.set(r, [...(replies.get(r) ?? []), c]); }
 
-  const Item = ({ c, isReply }: { c: CommentDto; isReply?: boolean }) => (
-    <li className={cn("fade-in flex gap-3", isReply && "ml-6 border-l-2 border-line pl-3 sm:ml-10")}>
-      <Link href={`/u/${c.author.handle}`}><Avatar user={c.author} size={isReply ? 28 : 32} /></Link>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline gap-x-2 text-sm">
-          <Link href={`/u/${c.author.handle}`} className="font-semibold hover:underline">{c.author.name}</Link>
-          <span className="text-xs text-muted">@{c.author.handle} · {timeAgo(c.createdAt)}</span>
-          {isReply && c.parentId && byId.get(c.parentId) && byId.get(c.parentId)!.id !== rootOf(c) && (
-            <span className="text-xs text-muted">· в ответ @{byId.get(c.parentId)!.author.handle}</span>
-          )}
-        </div>
-        <RichText text={c.text} className="mt-0.5 text-[15px] leading-relaxed" />
-        <div className="mt-1 flex items-center gap-1 text-xs">
-          <button onClick={() => onLike(c)} aria-pressed={c.likedByViewer} className={cn("btn btn-ghost gap-1 px-2 py-1 text-xs", c.likedByViewer ? "text-rose" : "hover:text-rose")}>
-            <Heart size={14} fill={c.likedByViewer ? "currentColor" : "none"} /> <span className="tabular-nums">{c.likeCount || ""}</span>
-          </button>
-          <button onClick={() => onReply(c)} className="btn btn-ghost gap-1 px-2 py-1 text-xs hover:text-accent"><Reply size={14} /> Ответить</button>
-        </div>
-      </div>
-    </li>
-  );
-
   return (
     <section id="comments" className="card p-5">
       <h2 className="font-display text-base font-bold">Комментарии {q.data ? <span className="text-muted">· {items.length}</span> : null}</h2>
@@ -115,13 +93,43 @@ export function Comments({ postId, postText }: { postId: string; postText: strin
         {roots.map((c) => (
           <li key={c.id}>
             <ul className="space-y-3">
-              <Item c={c} />
-              {(replies.get(c.id) ?? []).map((r) => <Item key={r.id} c={r} isReply />)}
+              <CommentItem c={c} byId={byId} rootId={c.id} onLike={onLike} onReply={onReply} />
+              {(replies.get(c.id) ?? []).map((r) => <CommentItem key={r.id} c={r} isReply byId={byId} rootId={c.id} onLike={onLike} onReply={onReply} />)}
             </ul>
           </li>
         ))}
         {q.data && !items.length && <li className="text-sm text-muted">Пока никто не ответил. Будьте первым.</li>}
       </ul>
     </section>
+  );
+}
+
+/**
+ * Один комментарий. Вынесен из Comments намеренно: компонент, объявленный внутри рендера,
+ * пересоздаётся на каждом нажатии клавиши в форме — список моргал и «прыгал».
+ */
+function CommentItem({ c, isReply, byId, rootId, onLike, onReply }: {
+  c: CommentDto; isReply?: boolean; byId: Map<string, CommentDto>; rootId: string;
+  onLike: (c: CommentDto) => void; onReply: (c: CommentDto) => void;
+}) {
+  const parent = c.parentId ? byId.get(c.parentId) : undefined;
+  return (
+    <li className={cn("flex gap-3", isReply && "ml-6 border-l-2 border-line pl-3 sm:ml-10")}>
+      <Link href={`/u/${c.author.handle}`}><Avatar user={c.author} size={isReply ? 28 : 32} /></Link>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-x-2 text-sm">
+          <Link href={`/u/${c.author.handle}`} className="font-semibold hover:underline">{c.author.name}</Link>
+          <span className="text-xs text-muted">@{c.author.handle} · {timeAgo(c.createdAt)}</span>
+          {isReply && parent && parent.id !== rootId && <span className="text-xs text-muted">· в ответ @{parent.author.handle}</span>}
+        </div>
+        <RichText text={c.text} className="mt-0.5 text-[15px] leading-relaxed" />
+        <div className="mt-1 flex items-center gap-1 text-xs">
+          <button onClick={() => onLike(c)} aria-pressed={c.likedByViewer} className={cn("btn btn-ghost gap-1 px-2 py-1 text-xs", c.likedByViewer ? "text-rose" : "hover:text-rose")}>
+            <Heart size={14} fill={c.likedByViewer ? "currentColor" : "none"} /> <span className="tabular-nums">{c.likeCount || ""}</span>
+          </button>
+          <button onClick={() => onReply(c)} className="btn btn-ghost gap-1 px-2 py-1 text-xs hover:text-accent"><Reply size={14} /> Ответить</button>
+        </div>
+      </div>
+    </li>
   );
 }
