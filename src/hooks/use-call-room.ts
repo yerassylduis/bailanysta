@@ -176,6 +176,14 @@ export function useCallRoom(callId: string, me: UserDto | null) {
     try { await api.leaveCall(callId); } catch {}
   }, [callId]);
 
+  // Данные комнаты для экрана входа (название, участники) — до подключения к медиа.
+  useEffect(() => {
+    let alive = true;
+    api.call(callId).then((r) => { if (alive) { setCall(r.call); setChat(r.chat.map((h) => ({ id: h.id, from: h.from, text: (h.payload as { text: string }).text, at: h.createdAt }))); } })
+      .catch((e) => { if (alive) setError(e instanceof Error ? e.message : "Звонок не найден"); });
+    return () => { alive = false; };
+  }, [callId]);
+
   useEffect(() => () => { esRef.current?.close(); for (const pc of pcs.current.values()) pc.close(); localRef.current?.getTracks().forEach((t) => t.stop()); screenStream.current?.getTracks().forEach((t) => t.stop()); }, []);
 
   const toggleMute = useCallback(() => {
