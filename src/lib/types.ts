@@ -130,9 +130,13 @@ export type Page<T> = { items: T[]; nextCursor: string | null };
 
 export type TrendingTag = { tag: string; count: number };
 
+export type GalaxyDto = { id: string; name: string; avatarUrl: string | null; members: number };
+export type GalaxyLinkDto = { id: string; from: string; to: string; description: string; createdBy: string };
 export type GraphDto = {
-  nodes: Array<UserDto & { posts: number; followers: number }>;
+  nodes: Array<UserDto & { posts: number; followers: number; galaxyId: string | null }>;
   links: Array<{ source: string; target: string }>;
+  galaxies: GalaxyDto[];
+  galaxyLinks: GalaxyLinkDto[];
 };
 
 export type MuseMode = "draft" | "polish" | "hashtags" | "translate" | "reply" | "caption";

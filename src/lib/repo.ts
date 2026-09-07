@@ -6,6 +6,7 @@ import { extractMentions, extractTags, hueFromHandle } from "./text";
 import type { CommentDto, GraphDto, MediaDto, MeDto, NotificationDto, Page, PostDto, TrendingTag, UserDto, UserProfileDto } from "./types";
 import type { Media, User } from "@/db/schema";
 import { BOT_HANDLE } from "./bot";
+import { ensureGalaxies } from "./repo-galaxies";
 
 /**
  * Репозиторий — единственное место, где живёт SQL.
@@ -62,7 +63,7 @@ export async function loginOrRegister(handle: string, name?: string) {
   const existing = await findUserByHandle(handle);
   if (existing) return { user: existing, created: false };
   const user: User = {
-    id: newId(), handle, name: name?.trim() || `@${handle}`, bio: "", hue: hueFromHandle(handle), avatarUrl: null, cover: null, phone: null, email: null, birthday: null, role: "user", bannedUntil: null, banReason: null, createdAt: nowIso(),
+    id: newId(), handle, name: name?.trim() || `@${handle}`, bio: "", hue: hueFromHandle(handle), avatarUrl: null, cover: null, phone: null, email: null, birthday: null, role: "user", bannedUntil: null, banReason: null, galaxyId: null, createdAt: nowIso(),
   };
   await db.insert(users).values(user);
   return { user, created: true };
@@ -569,8 +570,12 @@ export async function socialGraph(): Promise<GraphDto> {
   ]);
   const pcm = new Map(pc.map((x) => [x.id, x.n]));
   const fcm = new Map(fc.map((x) => [x.id, x.n]));
+  const links = fs.map((f) => ({ source: f.followerId, target: f.followeeId }));
+  const g = await ensureGalaxies(us, links, fcm);
   return {
-    nodes: us.map((u) => ({ ...toUserDto(u), posts: pcm.get(u.id) ?? 0, followers: fcm.get(u.id) ?? 0 })),
-    links: fs.map((f) => ({ source: f.followerId, target: f.followeeId })),
+    nodes: us.map((u) => ({ ...toUserDto(u), posts: pcm.get(u.id) ?? 0, followers: fcm.get(u.id) ?? 0, galaxyId: g.galaxyOf.get(u.id) ?? null })),
+    links,
+    galaxies: g.galaxies,
+    galaxyLinks: g.galaxyLinks,
   };
 }

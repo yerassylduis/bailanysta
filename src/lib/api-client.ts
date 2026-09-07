@@ -1,4 +1,4 @@
-import type { AdminLogDto, AdminStatsDto, AdminUserDto, CallDto, CommentDto, ConversationDto, GraphDto, MeDto, MediaDto, MessageDto, MuseRequest, MuseResponse, NotificationDto, Page, PostDto, SignalDto, SignalType, TrendingTag, UserDto, UserProfileDto } from "./types";
+import type { AdminLogDto, AdminStatsDto, AdminUserDto, CallDto, CommentDto, ConversationDto, GalaxyDto, GalaxyLinkDto, GraphDto, MeDto, MediaDto, MessageDto, MuseRequest, MuseResponse, NotificationDto, Page, PostDto, SignalDto, SignalType, TrendingTag, UserDto, UserProfileDto } from "./types";
 
 /** Тонкий типизированный клиент к собственному API. Единственная точка fetch на клиенте. */
 
@@ -119,5 +119,8 @@ export const api = {
 
   trending: () => request<{ items: TrendingTag[] }>("/api/tags/trending"),
   graph: () => request<GraphDto>("/api/graph"),
+  updateGalaxy: (id: string, body: { name?: string; avatarMediaId?: string | null }) => request<GalaxyDto>(`/api/galaxies/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  linkGalaxies: (id: string, body: { toId: string; description: string }) => request<GalaxyLinkDto>(`/api/galaxies/${id}/links`, { method: "POST", body: JSON.stringify(body) }),
+  unlinkGalaxies: (linkId: string) => request<{ ok: true }>(`/api/galaxies/links/${linkId}`, { method: "DELETE" }),
   muse: (body: MuseRequest) => request<MuseResponse>("/api/ai/muse", { method: "POST", body: JSON.stringify(body) }),
 };

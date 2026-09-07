@@ -26,6 +26,28 @@ export const users = sqliteTable("users", {
   /** Бан: до какого момента (ISO) или "forever"; null — не забанен */
   bannedUntil: text("banned_until"),
   banReason: text("ban_reason"),
+  /** Галактика (группа/отдел) в созвездии; назначается по сообществу подписок, дальше хранится. */
+  galaxyId: text("galaxy_id"),
+  createdAt: text("created_at").notNull(),
+});
+
+/** Галактика — именованная группа людей в созвездии с общим аватаром. */
+export const galaxies = sqliteTable("galaxies", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  avatarUrl: text("avatar_url"),
+  createdBy: text("created_by"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+/** Связь между галактиками с описанием, чем они связаны. */
+export const galaxyLinks = sqliteTable("galaxy_links", {
+  id: text("id").primaryKey(),
+  fromId: text("from_id").notNull().references(() => galaxies.id, { onDelete: "cascade" }),
+  toId: text("to_id").notNull().references(() => galaxies.id, { onDelete: "cascade" }),
+  description: text("description").notNull(),
+  createdBy: text("created_by").notNull(),
   createdAt: text("created_at").notNull(),
 });
 
@@ -270,6 +292,8 @@ export const notifications = sqliteTable(
 );
 
 export type User = typeof users.$inferSelect;
+export type Galaxy = typeof galaxies.$inferSelect;
+export type GalaxyLink = typeof galaxyLinks.$inferSelect;
 export type Post = typeof posts.$inferSelect;
 export type Comment = typeof comments.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;

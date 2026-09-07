@@ -98,7 +98,7 @@ export async function adminCreateUser(admin: User, input: AdminUserInput) {
   const db = await getDb();
   const user: User = {
     id: newId(), handle: out.handle!, name: out.name!, bio: out.bio ?? "", hue: hueFromHandle(out.handle!), avatarUrl: null, cover: null,
-    phone: out.phone ?? null, email: out.email ?? null, birthday: out.birthday ?? null, role: out.role ?? "user", bannedUntil: null, banReason: null, createdAt: nowIso(),
+    phone: out.phone ?? null, email: out.email ?? null, birthday: out.birthday ?? null, role: out.role ?? "user", bannedUntil: null, banReason: null, galaxyId: null, createdAt: nowIso(),
   };
   await db.insert(users).values(user);
   await log(admin.id, "user.create", user.id, { handle: user.handle });

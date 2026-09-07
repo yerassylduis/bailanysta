@@ -26,7 +26,7 @@ export const POST = handler(async (req) => {
     // повторная проверка уникальности — между запросом кода и вводом кто-то мог занять ник
     const [clash] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.handle, p.handle)).limit(1);
     if (clash) throw new HttpError(409, "Этот ник уже заняли. Начните регистрацию заново");
-    user = { id: newId(), handle: p.handle, name: p.name, bio: "", hue: hueFromHandle(p.handle), avatarUrl: null, cover: null, phone: p.phone, email: p.email, birthday: p.birthday, role: "user", bannedUntil: null, banReason: null, createdAt: nowIso() };
+    user = { id: newId(), handle: p.handle, name: p.name, bio: "", hue: hueFromHandle(p.handle), avatarUrl: null, cover: null, phone: p.phone, email: p.email, birthday: p.birthday, role: "user", bannedUntil: null, banReason: null, galaxyId: null, createdAt: nowIso() };
     await db.insert(schema.users).values(user);
     created = true;
   } else {

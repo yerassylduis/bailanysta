@@ -251,6 +251,18 @@ export function useMarkRead() {
 export const useTrending = () => useQuery({ queryKey: keys.trending, queryFn: api.trending, staleTime: 60_000 });
 export const useSuggested = () => useQuery({ queryKey: keys.suggested, queryFn: api.suggested, staleTime: 60_000 });
 export const useGraph = () => useQuery({ queryKey: keys.graph, queryFn: api.graph, staleTime: 60_000 });
+export function useUpdateGalaxy() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (v: { id: string; name?: string; avatarMediaId?: string | null }) => api.updateGalaxy(v.id, v), onSuccess: () => qc.invalidateQueries({ queryKey: keys.graph }) });
+}
+export function useLinkGalaxies() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (v: { id: string; toId: string; description: string }) => api.linkGalaxies(v.id, v), onSuccess: () => qc.invalidateQueries({ queryKey: keys.graph }) });
+}
+export function useUnlinkGalaxies() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (linkId: string) => api.unlinkGalaxies(linkId), onSuccess: () => qc.invalidateQueries({ queryKey: keys.graph }) });
+}
 export const useMuse = () => useMutation({ mutationFn: api.muse });
 
 /** Убирает пост из всех лент (например, если он удалён). */

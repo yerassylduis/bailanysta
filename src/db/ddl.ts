@@ -20,6 +20,22 @@ export const DDL: string[] = [
     ban_reason TEXT,
     created_at TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS galaxies (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    avatar_url TEXT,
+    created_by TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS galaxy_links (
+    id TEXT PRIMARY KEY,
+    from_id TEXT NOT NULL REFERENCES galaxies(id) ON DELETE CASCADE,
+    to_id TEXT NOT NULL REFERENCES galaxies(id) ON DELETE CASCADE,
+    description TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS admin_log (
     id TEXT PRIMARY KEY,
     admin_id TEXT NOT NULL,
@@ -186,6 +202,7 @@ export const DDL: string[] = [
  * Ошибка «duplicate column» игнорируется вызывающей стороной.
  */
 export const SOFT_MIGRATIONS: string[] = [
+  `ALTER TABLE users ADD COLUMN galaxy_id TEXT`,
   `ALTER TABLE posts ADD COLUMN repost_of_id TEXT`,
   `ALTER TABLE users ADD COLUMN avatar_url TEXT`,
   `ALTER TABLE users ADD COLUMN cover TEXT`,
