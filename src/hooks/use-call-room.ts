@@ -20,6 +20,13 @@ import type { CallDto, SignalDto, UserDto } from "@/lib/types";
 
 export type Peer = { user: UserDto; stream: MediaStream | null; muted: boolean; camOff: boolean; sharing: boolean; version: number; connected: boolean };
 export type ChatMsg = { id: string; from: UserDto; text: string; at: string };
+export type PeerStats = {
+  conn: string; ice: string; sig: string;
+  /** тип пары кандидатов: host / srflx / relay */
+  pair: string | null;
+  videoBytes: number; audioBytes: number; framesDecoded: number; fps: number; width: number; height: number;
+  rtt: number | null; remoteVideoMuted: boolean | null;
+};
 
 /** Запасная конфигурация, если /api/calls/ice недоступен. Основная приходит с сервера (STUN + TURN). */
 const FALLBACK_ICE: RTCConfiguration = {
@@ -39,6 +46,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
   const [recording, setRecording] = useState(false);
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
   const [recordingExt, setRecordingExt] = useState("webm");
+  const [stats, setStats] = useState<Record<string, PeerStats>>({});
 
   const iceRef = useRef<RTCConfiguration>(FALLBACK_ICE);
   const pcs = useRef(new Map<string, RTCPeerConnection>());
@@ -297,6 +305,32 @@ export function useCallRoom(callId: string, me: UserDto | null) {
         }
       }
       (window as unknown as { __blPcs?: unknown }).__blPcs = pcs.current;
+      // статистика getStats — для панели диагностики
+      (async () => {
+        const next: Record<string, PeerStats> = {};
+        for (const [id, pc] of pcs.current) {
+          const st: PeerStats = { conn: pc.connectionState, ice: pc.iceConnectionState, sig: pc.signalingState, pair: null, videoBytes: 0, audioBytes: 0, framesDecoded: 0, fps: 0, width: 0, height: 0, rtt: null, remoteVideoMuted: null };
+          const vt = pc.getReceivers().find((r) => r.track.kind === "video")?.track;
+          if (vt) st.remoteVideoMuted = vt.muted;
+          try {
+            const report = await pc.getStats();
+            const byId = new Map<string, Record<string, unknown>>();
+            report.forEach((r) => byId.set(r.id, r as unknown as Record<string, unknown>));
+            report.forEach((r) => {
+              const rec = r as unknown as Record<string, unknown>;
+              if (rec.type === "inbound-rtp" && rec.kind === "video") { st.videoBytes = Number(rec.bytesReceived ?? 0); st.framesDecoded = Number(rec.framesDecoded ?? 0); st.fps = Number(rec.framesPerSecond ?? 0); st.width = Number(rec.frameWidth ?? 0); st.height = Number(rec.frameHeight ?? 0); }
+              if (rec.type === "inbound-rtp" && rec.kind === "audio") st.audioBytes = Number(rec.bytesReceived ?? 0);
+              if (rec.type === "candidate-pair" && (rec.nominated || rec.state === "succeeded") && rec.localCandidateId) {
+                const l = byId.get(String(rec.localCandidateId)), rm = byId.get(String(rec.remoteCandidateId));
+                if (l && rm) st.pair = `${l.candidateType} ↔ ${rm.candidateType}`;
+                if (rec.currentRoundTripTime != null) st.rtt = Math.round(Number(rec.currentRoundTripTime) * 1000);
+              }
+            });
+          } catch {}
+          next[id] = st;
+        }
+        setStats(next);
+      })();
       (window as unknown as { __blCall?: unknown }).__blCall = Object.fromEntries([...pcs.current].map(([id, pc]) => [id, { conn: pc.connectionState, ice: pc.iceConnectionState, gather: pc.iceGatheringState, sig: pc.signalingState, hasRemote: !!pc.remoteDescription, gen: gen.current.get(id) }]));
     }, 2000);
     return () => clearInterval(t);
@@ -412,5 +446,5 @@ export function useCallRoom(callId: string, me: UserDto | null) {
 
   const stopRecording = useCallback(() => { recorder.current?.stop(); }, []);
 
-  return { call, joined, error, local, peers, chat, muted, camOff, sharing, recording, recordingUrl, recordingExt, join, leave, toggleMute, toggleCam, startShare, stopShare, sendChat, startRecording, stopRecording };
+  return { call, joined, error, local, peers, chat, stats, muted, camOff, sharing, recording, recordingUrl, recordingExt, join, leave, toggleMute, toggleCam, startShare, stopShare, sendChat, startRecording, stopRecording };
 }

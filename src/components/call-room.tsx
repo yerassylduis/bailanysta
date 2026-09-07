@@ -7,7 +7,8 @@ import { useConversations, useMe } from "@/hooks/use-data";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { UserPlus, Search, X, Check } from "lucide-react";
-import { useCallRoom, type Peer } from "@/hooks/use-call-room";
+import { useCallRoom, type Peer, type PeerStats } from "@/hooks/use-call-room";
+import { Activity, Volume2 } from "lucide-react";
 import { Avatar, EmptyState } from "./ui";
 import { useToast } from "./toast";
 import { cn } from "@/lib/format";
@@ -20,6 +21,7 @@ export function CallRoom({ id }: { id: string }) {
   const toast = useToast();
   const [chatOpen, setChatOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [diagOpen, setDiagOpen] = useState(false);
   const [text, setText] = useState("");
   const chatBottom = useRef<HTMLDivElement>(null);
   // Непрочитанные в чате — производное: сколько сообщений пришло с момента, когда чат последний раз был открыт.
@@ -77,7 +79,7 @@ export function CallRoom({ id }: { id: string }) {
       <div className="flex min-h-0 flex-1 gap-3">
         {/* Сетка */}
         <div className="grid min-h-0 flex-1 gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: "1fr" }}>
-          {tiles.map((t) => <Tile key={t.id} user={t.user} stream={t.stream} me={t.me} muted={t.muted} camOff={t.camOff} sharing={t.sharing} version={t.version} connected={t.connected} />)}
+          {tiles.map((t) => <Tile key={t.id} user={t.user} stream={t.stream} me={t.me} muted={t.muted} camOff={t.camOff} sharing={t.sharing} version={t.version} connected={t.connected} stats={t.me ? undefined : room.stats[t.id]} />)}
         </div>
 
         {/* Чат */}
@@ -100,12 +102,37 @@ export function CallRoom({ id }: { id: string }) {
         </aside>
       </div>
 
+      {diagOpen && (
+        <div className="card p-3 text-xs">
+          <div className="mb-1.5 flex items-center justify-between"><span className="flex items-center gap-1.5 font-semibold"><Activity size={14} className="text-accent" /> Диагностика соединения</span><button onClick={() => setDiagOpen(false)} className="btn btn-ghost btn-icon h-6 w-6">✕</button></div>
+          {Object.keys(room.stats).length === 0 && <p className="text-muted">Пока нет собеседников.</p>}
+          <div className="grid gap-2 sm:grid-cols-2">
+            {Object.entries(room.stats).map(([id, st]) => {
+              const name = room.peers[id]?.user.name ?? id;
+              const noVideo = st.conn === "connected" && st.framesDecoded === 0;
+              return (
+                <div key={id} className="rounded-xl bg-bg-2 p-2.5 font-mono text-[11px] leading-relaxed">
+                  <div className="mb-1 font-sans text-xs font-semibold">{name}</div>
+                  <div>состояние: <b className={st.conn === "connected" ? "text-accent" : "text-rose"}>{st.conn}</b> · ice: {st.ice} · sdp: {st.sig}</div>
+                  <div>маршрут: {st.pair ?? "—"}{st.rtt != null ? ` · ${st.rtt} мс` : ""}</div>
+                  <div>видео: {st.width}×{st.height} · {st.fps || 0} fps · кадров {st.framesDecoded} · {(st.videoBytes / 1024).toFixed(0)} КБ</div>
+                  <div>звук: {(st.audioBytes / 1024).toFixed(0)} КБ · дорожка видео {st.remoteVideoMuted == null ? "нет" : st.remoteVideoMuted ? "без данных (muted)" : "активна"}</div>
+                  {noVideo && <div className="mt-1 font-sans text-[11px] text-saffron">Соединение есть, но видеокадры не приходят: у собеседника выключена или занята камера, либо вкладка в фоне.</div>}
+                  {st.conn !== "connected" && <div className="mt-1 font-sans text-[11px] text-saffron">Нет соединения: если маршрут «—» дольше 20 с, сети не пробиваются напрямую, нужен TURN (README).</div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Панель управления */}
       <footer className="card flex flex-wrap items-center justify-center gap-2 p-2 pb-safe">
         <Ctl on={!room.muted} onClick={room.toggleMute} label={room.muted ? "Включить микрофон" : "Выключить микрофон"}>{room.muted ? <MicOff size={20} /> : <Mic size={20} />}</Ctl>
         <Ctl on={!room.camOff} onClick={room.toggleCam} label={room.camOff ? "Включить камеру" : "Выключить камеру"}>{room.camOff ? <VideoOff size={20} /> : <Video size={20} />}</Ctl>
         <Ctl on={room.sharing} accent onClick={room.sharing ? room.stopShare : room.startShare} label={room.sharing ? "Остановить показ экрана" : "Показать экран"}>{room.sharing ? <MonitorOff size={20} /> : <MonitorUp size={20} />}</Ctl>
         <Ctl on={room.recording} danger onClick={room.recording ? room.stopRecording : room.startRecording} label={room.recording ? "Остановить запись" : "Записать звонок"}>{room.recording ? <Square size={18} /> : <Circle size={20} />}</Ctl>
+        <button onClick={() => setDiagOpen((o) => !o)} className={cn("btn btn-outline btn-icon h-12 w-12", diagOpen && "bg-accent-soft border-accent")} aria-label="Диагностика" title="Диагностика соединения"><Activity size={20} /></button>
         <button onClick={() => openChat(!chatOpen)} className={cn("btn btn-outline relative btn-icon h-12 w-12", chatOpen && "bg-accent-soft border-accent")} aria-label="Чат"><MessageSquare size={20} />{unread > 0 && !chatOpen && <span className="absolute -right-1 -top-1 rounded-full bg-rose px-1.5 text-[10px] font-bold text-white">{unread}</span>}</button>
         {room.recording && <span className="flex items-center gap-1.5 text-xs font-semibold text-rose"><span className="h-2 w-2 animate-pulse rounded-full bg-rose" /> идёт запись</span>}
         {room.recordingUrl && <a href={room.recordingUrl} download={`bailanysta-${id}.${room.recordingExt}`} className="btn btn-outline gap-1.5 text-xs"><Download size={14} /> Скачать запись</a>}
@@ -124,28 +151,39 @@ function Ctl({ on, accent, danger, onClick, label, children }: { on: boolean; ac
   );
 }
 
-/** Плитка участника: видео (или аватар при выключенной камере), имя, индикаторы. */
-function Tile({ user, stream, me, muted, camOff, sharing, version, connected }: { user: UserDto; stream: MediaStream | null; me?: boolean; muted: boolean; camOff: boolean; sharing: boolean; version: number; connected: boolean }) {
+/** Плитка участника: видео (или аватар при выключенной камере), имя, индикаторы, подсказки по диагностике. */
+function Tile({ user, stream, me, muted, camOff, sharing, version, connected, stats }: { user: UserDto; stream: MediaStream | null; me?: boolean; muted: boolean; camOff: boolean; sharing: boolean; version: number; connected: boolean; stats?: PeerStats }) {
   const ref = useRef<HTMLVideoElement>(null);
+  const [blocked, setBlocked] = useState(false);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     if (el.srcObject !== stream) { el.srcObject = stream; console.info("[call] tile", user.handle, "srcObject set:", stream ? stream.getTracks().map((t) => t.kind).join("+") : "null"); }
-    // после смены дорожек браузер может остановить воспроизведение — запускаем явно
-    el.play().catch(() => {});
+    // Автовоспроизведение со звуком браузер может запретить — тогда покажем кнопку
+    el.play().then(() => setBlocked(false)).catch((e) => { console.warn("[call] play blocked", user.handle, e?.name); setBlocked(true); });
   }, [stream, version, user.handle]);
   const videoTrack = stream?.getVideoTracks()[0];
   const hasVideo = !!videoTrack && videoTrack.readyState === "live" && !videoTrack.muted && !camOff;
+  const noFrames = !me && connected && hasVideo && stats && stats.framesDecoded === 0 && stats.videoBytes === 0;
   return (
     <div className="relative min-h-0 overflow-hidden rounded-2xl border border-line bg-black">
       <video ref={ref} data-call-tile={user.name} autoPlay playsInline muted={me} className={cn("h-full w-full object-cover", sharing && "object-contain", !hasVideo && "opacity-0", me && !sharing && "scale-x-[-1]")} />
       {!hasVideo && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg-2">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg-2 px-4 text-center">
           <Avatar user={user} size={72} />
           {!me && !connected && <span className="text-xs text-muted">Соединяемся…</span>}
-          {!me && !connected && <span className="max-w-[80%] text-center text-[11px] text-muted/70">Если дольше 20 секунд — сети не соединяются напрямую, нужен TURN-релей (см. README)</span>}
+          {!me && !connected && <span className="max-w-[80%] text-[11px] text-muted/70">Если дольше 20 секунд — сети не соединяются напрямую, нужен TURN-релей (см. README)</span>}
           {!me && connected && camOff && <span className="text-xs text-muted">Камера выключена</span>}
+          {!me && connected && !camOff && <span className="text-xs text-muted">Видео от собеседника пока не поступает</span>}
         </div>
+      )}
+      {noFrames && (
+        <div className="absolute inset-x-3 top-3 rounded-lg bg-black/60 px-3 py-1.5 text-center text-[11px] text-white backdrop-blur">
+          Соединение есть, но кадры не идут: у собеседника камера занята другим приложением или вкладка в фоне
+        </div>
+      )}
+      {blocked && !me && (
+        <button onClick={() => { ref.current?.play().then(() => setBlocked(false)).catch(() => {}); }} className="btn btn-primary absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"><Volume2 size={16} /> Включить видео и звук</button>
       )}
       <div className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur">
         {muted && <MicOff size={12} className="text-rose" />}{sharing && <MonitorUp size={12} className="text-accent" />}
@@ -155,7 +193,7 @@ function Tile({ user, stream, me, muted, camOff, sharing, version, connected }: 
   );
 }
 
-/** Пригласить в звонок: недавние собеседники + поиск по нику/имени; приглашение уходит личным сообщением со ссылкой. */
+/** Пригласить в звонок: недавние собеседники + поиск по нику/имени; приглашение уходит уведомлением с кнопкой и сообщением со ссылкой. */
 function InvitePopover({ callId, onClose, onCopy, inCall }: { callId: string; onClose: () => void; onCopy: () => void; inCall: Set<string> }) {
   const toast = useToast();
   const [q, setQ] = useState("");
