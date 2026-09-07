@@ -30,9 +30,9 @@ export function CallRoom({ id }: { id: string }) {
   const copyLink = async () => { try { await navigator.clipboard.writeText(`${location.origin}/calls/${id}`); toast("Ссылка на созвон скопирована", "success"); } catch { toast(`${location.origin}/calls/${id}`); } };
   const sendChat = async () => { const t = text.trim(); if (!t) return; await room.sendChat(t); setText(""); };
 
-  const tiles: Array<{ id: string; user: UserDto; stream: MediaStream | null; me?: boolean; muted: boolean; camOff: boolean; sharing: boolean }> = [
-    ...(me?.user ? [{ id: "me", user: me.user, stream: room.local, me: true, muted: room.muted, camOff: room.camOff, sharing: room.sharing }] : []),
-    ...Object.values(room.peers).map((p: Peer) => ({ id: p.user.id, user: p.user, stream: p.stream, muted: p.muted, camOff: p.camOff, sharing: p.sharing })),
+  const tiles: Array<{ id: string; user: UserDto; stream: MediaStream | null; me?: boolean; muted: boolean; camOff: boolean; sharing: boolean; version: number; connected: boolean }> = [
+    ...(me?.user ? [{ id: "me", user: me.user, stream: room.local, me: true, muted: room.muted, camOff: room.camOff, sharing: room.sharing, version: 0, connected: true }] : []),
+    ...Object.values(room.peers).map((p: Peer) => ({ id: p.user.id, user: p.user, stream: p.stream, muted: p.muted, camOff: p.camOff, sharing: p.sharing, version: p.version, connected: p.connected })),
   ];
   const n = tiles.length;
   const cols = n <= 1 ? 1 : n <= 4 ? 2 : 3;
@@ -70,7 +70,7 @@ export function CallRoom({ id }: { id: string }) {
       <div className="flex min-h-0 flex-1 gap-3">
         {/* Сетка */}
         <div className="grid min-h-0 flex-1 gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: "1fr" }}>
-          {tiles.map((t) => <Tile key={t.id} user={t.user} stream={t.stream} me={t.me} muted={t.muted} camOff={t.camOff} sharing={t.sharing} />)}
+          {tiles.map((t) => <Tile key={t.id} user={t.user} stream={t.stream} me={t.me} muted={t.muted} camOff={t.camOff} sharing={t.sharing} version={t.version} connected={t.connected} />)}
         </div>
 
         {/* Чат */}
@@ -100,7 +100,8 @@ export function CallRoom({ id }: { id: string }) {
         <Ctl on={room.sharing} accent onClick={room.sharing ? room.stopShare : room.startShare} label={room.sharing ? "Остановить показ экрана" : "Показать экран"}>{room.sharing ? <MonitorOff size={20} /> : <MonitorUp size={20} />}</Ctl>
         <Ctl on={room.recording} danger onClick={room.recording ? room.stopRecording : room.startRecording} label={room.recording ? "Остановить запись" : "Записать звонок"}>{room.recording ? <Square size={18} /> : <Circle size={20} />}</Ctl>
         <button onClick={() => openChat(!chatOpen)} className={cn("btn btn-outline relative btn-icon h-12 w-12", chatOpen && "bg-accent-soft border-accent")} aria-label="Чат"><MessageSquare size={20} />{unread > 0 && !chatOpen && <span className="absolute -right-1 -top-1 rounded-full bg-rose px-1.5 text-[10px] font-bold text-white">{unread}</span>}</button>
-        {room.recordingUrl && <a href={room.recordingUrl} download={`bailanysta-${id}.webm`} className="btn btn-outline gap-1.5 text-xs"><Download size={14} /> Скачать запись</a>}
+        {room.recording && <span className="flex items-center gap-1.5 text-xs font-semibold text-rose"><span className="h-2 w-2 animate-pulse rounded-full bg-rose" /> идёт запись</span>}
+        {room.recordingUrl && <a href={room.recordingUrl} download={`bailanysta-${id}.${room.recordingExt}`} className="btn btn-outline gap-1.5 text-xs"><Download size={14} /> Скачать запись</a>}
         <Link href="/calls" onClick={() => room.leave()} className="btn ml-2 bg-rose px-5 text-white hover:brightness-110"><PhoneOff size={18} /> Выйти</Link>
       </footer>
     </div>
@@ -117,14 +118,27 @@ function Ctl({ on, accent, danger, onClick, label, children }: { on: boolean; ac
 }
 
 /** Плитка участника: видео (или аватар при выключенной камере), имя, индикаторы. */
-function Tile({ user, stream, me, muted, camOff, sharing }: { user: UserDto; stream: MediaStream | null; me?: boolean; muted: boolean; camOff: boolean; sharing: boolean }) {
+function Tile({ user, stream, me, muted, camOff, sharing, version, connected }: { user: UserDto; stream: MediaStream | null; me?: boolean; muted: boolean; camOff: boolean; sharing: boolean; version: number; connected: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
-  useEffect(() => { if (ref.current && ref.current.srcObject !== stream) ref.current.srcObject = stream; }, [stream]);
-  const hasVideo = !!stream?.getVideoTracks().some((t) => t.enabled && t.readyState === "live") && !camOff;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (el.srcObject !== stream) el.srcObject = stream;
+    // после смены дорожек браузер может остановить воспроизведение — запускаем явно
+    el.play().catch(() => {});
+  }, [stream, version]);
+  const videoTrack = stream?.getVideoTracks()[0];
+  const hasVideo = !!videoTrack && videoTrack.readyState === "live" && !videoTrack.muted && !camOff;
   return (
     <div className="relative min-h-0 overflow-hidden rounded-2xl border border-line bg-black">
       <video ref={ref} data-call-tile={user.name} autoPlay playsInline muted={me} className={cn("h-full w-full object-cover", sharing && "object-contain", !hasVideo && "opacity-0", me && !sharing && "scale-x-[-1]")} />
-      {!hasVideo && <div className="absolute inset-0 flex items-center justify-center bg-bg-2"><Avatar user={user} size={72} /></div>}
+      {!hasVideo && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg-2">
+          <Avatar user={user} size={72} />
+          {!me && !connected && <span className="text-xs text-muted">Соединяемся…</span>}
+          {!me && connected && camOff && <span className="text-xs text-muted">Камера выключена</span>}
+        </div>
+      )}
       <div className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur">
         {muted && <MicOff size={12} className="text-rose" />}{sharing && <MonitorUp size={12} className="text-accent" />}
         {user.name}{me && " (вы)"}
