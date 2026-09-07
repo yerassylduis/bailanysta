@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   icons: { icon: "/icon.svg" },
 };
 
-export const viewport: Viewport = { themeColor: "#f2f3fa", width: "device-width", initialScale: 1, viewportFit: "cover" };
+export const viewport: Viewport = { themeColor: "#f6f5f0", width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 /* Скрипт исполняется до первой отрисовки, чтобы тема не «мигала». */
 const themeScript = `(function(){try{var t=localStorage.getItem('bl_theme');document.documentElement.setAttribute('data-theme',t==='dark'?'dark':'light')}catch(e){}})();`;

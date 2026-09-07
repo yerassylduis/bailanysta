@@ -6,8 +6,8 @@
 :root {
   color-scheme: light;
   /* Күн — день: чистый светлый фон, насыщенная бирюза, тёплый шафран, контрастный текст */
-  --bg: #f2f3fa;
-  --bg-2: #e6e8f3;
+  --bg: #f6f5f0;
+  --bg-2: #ebe9e1;
   --elev: #ffffff;
   --ink: #15130f;
   --ink-2: #3a362f;
@@ -90,7 +90,7 @@ body {
   animation: nebula-drift 38s ease-in-out infinite alternate;
 }
 .nebula-a { width: 60vmax; height: 60vmax; left: -20vmax; top: -25vmax; background: radial-gradient(circle, var(--accent-soft), transparent 65%); }
-.nebula-b { width: 55vmax; height: 55vmax; right: -22vmax; top: -10vmax; background: radial-gradient(circle, rgba(124,108,243,.22), transparent 65%); animation-duration: 47s; animation-delay: -12s; }
+.nebula-b { width: 55vmax; height: 55vmax; right: -22vmax; top: -10vmax; background: radial-gradient(circle, rgba(255,190,80,.22), transparent 65%); animation-duration: 47s; animation-delay: -12s; }
 .nebula-c { width: 50vmax; height: 50vmax; left: 30vw; bottom: -30vmax; background: radial-gradient(circle, var(--saffron-soft), transparent 65%); animation-duration: 55s; animation-delay: -25s; }
 [data-theme="dark"] .nebula { opacity: .8; }
 [data-theme="dark"] .nebula-b { background: radial-gradient(circle, rgba(124,108,243,.35), transparent 65%); }

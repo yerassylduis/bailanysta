@@ -6,8 +6,9 @@ import { useEffect, useRef } from "react";
  * Космический фон: canvas со звёздами трёх слоёв параллакса, мерцанием, медленным дрейфом,
  * пятью разными планетами (кольца, полосы, кратеры, лёд, луна) и редкими падающими звёздами;
  * под ним — CSS-туманности (см. .nebula в globals.css).
- * Читает тему из data-theme: ночью — белые звёзды на глубоком небе, днём — индиго/бирюзовые
- * искры на светлом фоне. Уважает prefers-reduced-motion и не рисует, когда вкладка скрыта.
+ * Читает тему из data-theme: ночью («Түн») — звёзды, планеты и метеоры на глубоком небе,
+ * днём («Күн») — солнце с мягкими вращающимися лучами, без звёзд.
+ * Уважает prefers-reduced-motion и не рисует, когда вкладка скрыта.
  */
 type Star = { x: number; y: number; z: number; r: number; tw: number; hue: number };
 type Meteor = { x: number; y: number; vx: number; vy: number; life: number; max: number };
@@ -21,6 +22,47 @@ const PLANETS: Planet[] = [
   { fx: 0.93, fy: 0.72, r: 40, kind: "ice", hue: 205, drift: 0.8, spin: 0.25 },
   { fx: 0.55, fy: 0.92, r: 16, kind: "moon", hue: 250, drift: 1.8, spin: 0.9 },
 ];
+
+/**
+ * Солнце для светлой темы «Күн»: тёплый диск, широкое сияние и медленно вращающиеся мягкие лучи.
+ * Никаких звёзд и планет — день.
+ */
+function drawSun(ctx: CanvasRenderingContext2D, w: number, h: number, t: number, reduced: boolean) {
+  const scale = Math.min(1, Math.max(0.6, w / 1400));
+  // Слева под навигацией — единственное место, где фон не закрыт карточками; на телефоне — верхний правый угол.
+  const mobile = w < 768;
+  // Привязка к нижнему краю: между пунктами меню и переключателем темы при любой высоте окна.
+  const cx = mobile ? w * 0.92 : w * 0.075, cy = mobile ? h * 0.06 : Math.max(430, h - 230), r = (mobile ? 46 : 64) * scale;
+  ctx.save();
+  // дальнее сияние
+  const halo = ctx.createRadialGradient(cx, cy, r * 0.8, cx, cy, r * 9);
+  halo.addColorStop(0, "rgba(255, 196, 92, 0.42)"); halo.addColorStop(0.35, "rgba(255, 214, 140, 0.16)"); halo.addColorStop(1, "rgba(255, 220, 160, 0)");
+  ctx.fillStyle = halo; ctx.fillRect(0, 0, w, h);
+  // лучи: 14 длинных мягких клиньев + 14 коротких между ними, вращаются очень медленно
+  const rot = reduced ? 0 : t * 0.0006;
+  ctx.translate(cx, cy);
+  for (let i = 0; i < 28; i++) {
+    const long = i % 2 === 0;
+    const a = rot + (i / 28) * Math.PI * 2;
+    const len = (long ? r * 7.5 : r * 4.5) * (0.9 + 0.1 * Math.sin(t * 0.004 + i));
+    const half = long ? 0.045 : 0.03;
+    const g = ctx.createLinearGradient(0, 0, Math.cos(a) * len, Math.sin(a) * len);
+    g.addColorStop(0, `rgba(255, 190, 80, ${long ? 0.22 : 0.14})`); g.addColorStop(1, "rgba(255, 200, 110, 0)");
+    ctx.beginPath(); ctx.moveTo(Math.cos(a) * r * 0.9, Math.sin(a) * r * 0.9);
+    ctx.lineTo(Math.cos(a - half) * len, Math.sin(a - half) * len);
+    ctx.lineTo(Math.cos(a + half) * len, Math.sin(a + half) * len);
+    ctx.closePath(); ctx.fillStyle = g; ctx.fill();
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  // ближнее свечение и диск
+  const glow = ctx.createRadialGradient(cx, cy, r * 0.6, cx, cy, r * 2.4);
+  glow.addColorStop(0, "rgba(255, 214, 110, 0.9)"); glow.addColorStop(1, "rgba(255, 214, 110, 0)");
+  ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(cx, cy, r * 2.4, 0, Math.PI * 2); ctx.fill();
+  const disc = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.1, cx, cy, r);
+  disc.addColorStop(0, "#fff4c2"); disc.addColorStop(0.55, "#ffd66b"); disc.addColorStop(1, "#f5a623");
+  ctx.fillStyle = disc; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
 
 /** Рисует одну планету с объёмной подсветкой слева-сверху. */
 function drawPlanet(ctx: CanvasRenderingContext2D, p: Planet, cx: number, cy: number, t: number, dark: boolean) {
@@ -129,6 +171,12 @@ export function Cosmos() {
       if (!alive) return;
       t += 1;
       ctx.clearRect(0, 0, w, h);
+      if (!dark) {
+        // День: только солнце с лучами
+        drawSun(ctx, w, h, t, reduced);
+        raf = reduced ? 0 : requestAnimationFrame(draw);
+        return;
+      }
       const drift = reduced ? 0 : 0.02;
       for (const s of stars) {
         s.x += drift * s.z; if (s.x > w + 2) s.x = -2;
