@@ -17,8 +17,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { id } = await params;
   const user = await currentUser();
   if (!user) return new Response("Unauthorized", { status: 401 });
-  const url = new URL(req.url);
-  let since = req.headers.get("last-event-id") || url.searchParams.get("since") || new Date(Date.now() - 5000).toISOString();
+  // Стартовая метка — ТОЛЬКО серверные часы (часы клиента могут спешить, и сигналы потерялись бы).
+  // При переподключении EventSource присылает Last-Event-ID — это тоже серверная метка.
+  let since = req.headers.get("last-event-id") || new Date(Date.now() - 3000).toISOString();
   let lastParts = "";
   let ticks = 0;
   const enc = new TextEncoder();
@@ -33,19 +34,22 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       controller.enqueue(enc.encode(`: connected\n\n`));
       const startedAt = Date.now();
       while (!closed && Date.now() - startedAt < LIFETIME_MS) {
+        // Каждая часть — в своём try: ошибка одной не должна останавливать остальные
+        let got = 0;
         try {
           const signals = await signalsSince(user.id, id, since);
+          got = signals.length;
           for (const s of signals) { since = s.createdAt; send("signal", s, s.createdAt); }
-          if (ticks % 5 === 0) { // раз в 2 с — участники и heartbeat
+        } catch (e) { console.error("[call-events] signals", e instanceof Error ? e.message : e); }
+        if (ticks % 5 === 0) { // раз в 2 с — участники и heartbeat
+          try {
             await heartbeat(user, id);
             const call = await getCall(id);
             const key = JSON.stringify(call.participants.map((p) => [p.id, p.online]));
             if (key !== lastParts) { lastParts = key; send("participants", call.participants); }
-          }
-          if (!signals.length && ticks % 10 === 0) controller.enqueue(enc.encode(`: ping\n\n`));
-        } catch (e) {
-          console.error("[call-events]", e instanceof Error ? e.message : e);
+          } catch (e) { console.error("[call-events] participants", e instanceof Error ? e.message : e); }
         }
+        if (!got && ticks % 10 === 0) { try { controller.enqueue(enc.encode(`: ping\n\n`)); } catch { closed = true; } }
         ticks++;
         await new Promise((r) => setTimeout(r, TICK_MS));
       }

@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Mic, MicOff, Video, VideoOff, MonitorUp, MonitorOff, Circle, Square, MessageSquare, PhoneOff, Copy, Download, Users, Send } from "lucide-react";
-import { useMe } from "@/hooks/use-data";
+import { useConversations, useMe } from "@/hooks/use-data";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api-client";
+import { UserPlus, Search, X, Check } from "lucide-react";
 import { useCallRoom, type Peer } from "@/hooks/use-call-room";
 import { Avatar, EmptyState } from "./ui";
 import { useToast } from "./toast";
@@ -16,6 +19,7 @@ export function CallRoom({ id }: { id: string }) {
   const room = useCallRoom(id, me?.user ?? null);
   const toast = useToast();
   const [chatOpen, setChatOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [text, setText] = useState("");
   const chatBottom = useRef<HTMLDivElement>(null);
   // Непрочитанные в чате — производное: сколько сообщений пришло с момента, когда чат последний раз был открыт.
@@ -64,7 +68,10 @@ export function CallRoom({ id }: { id: string }) {
         <h1 className="truncate font-display text-base font-bold">{room.call?.title}</h1>
         <span className="hidden font-mono text-xs text-muted sm:inline">{id}</span>
         <span className="ml-auto flex items-center gap-1 text-xs text-muted"><Users size={14} /> {tiles.length}</span>
-        <button onClick={copyLink} className="btn btn-outline px-3 py-1.5 text-xs"><Copy size={14} /> Пригласить</button>
+        <div className="relative">
+          <button onClick={() => setInviteOpen((o) => !o)} className="btn btn-primary px-3 py-1.5 text-xs"><UserPlus size={14} /> Пригласить</button>
+          {inviteOpen && <InvitePopover callId={id} onClose={() => setInviteOpen(false)} onCopy={copyLink} inCall={new Set(tiles.map((t) => t.user.id))} />}
+        </div>
       </header>
 
       <div className="flex min-h-0 flex-1 gap-3">
@@ -143,6 +150,42 @@ function Tile({ user, stream, me, muted, camOff, sharing, version, connected }: 
         {muted && <MicOff size={12} className="text-rose" />}{sharing && <MonitorUp size={12} className="text-accent" />}
         {user.name}{me && " (вы)"}
       </div>
+    </div>
+  );
+}
+
+/** Пригласить в звонок: недавние собеседники + поиск по нику/имени; приглашение уходит личным сообщением со ссылкой. */
+function InvitePopover({ callId, onClose, onCopy, inCall }: { callId: string; onClose: () => void; onCopy: () => void; inCall: Set<string> }) {
+  const toast = useToast();
+  const [q, setQ] = useState("");
+  const [sent, setSent] = useState<Set<string>>(new Set());
+  const convs = useConversations(true);
+  const search = useQuery({ queryKey: ["invite-search", q], queryFn: () => api.searchUsers(q), enabled: q.trim().length >= 1, staleTime: 10_000 });
+  const recent = (convs.data?.items ?? []).filter((c) => c.kind === "dm" && c.peer && c.peer.handle !== "bailanysta").map((c) => c.peer!);
+  const list = (q.trim() ? search.data?.items ?? [] : recent).filter((u) => u.handle !== "bailanysta" && !inCall.has(u.id)).slice(0, 8);
+
+  const invite = async (handle: string) => {
+    try { await api.inviteToCall(callId, handle); setSent((s) => new Set(s).add(handle)); toast(`Приглашение отправлено @${handle}`, "success"); }
+    catch (e) { toast(e instanceof Error ? e.message : "Не удалось пригласить", "error"); }
+  };
+
+  return (
+    <div className="card absolute right-0 top-10 z-40 w-80 p-3 shadow-card" onClick={(e) => e.stopPropagation()}>
+      <div className="mb-2 flex items-center justify-between"><span className="text-sm font-semibold">Пригласить в созвон</span><button onClick={onClose} className="btn btn-ghost btn-icon h-7 w-7"><X size={14} /></button></div>
+      <div className="relative"><Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ник или имя…" className="input py-2 pl-8 text-sm" /></div>
+      <p className="mt-2 px-1 text-[11px] uppercase tracking-wider text-muted">{q.trim() ? "Найдено" : "Недавние собеседники"}</p>
+      <ul className="mt-1 max-h-56 space-y-0.5 overflow-y-auto">
+        {list.map((u) => (
+          <li key={u.id}>
+            <button onClick={() => invite(u.handle)} disabled={sent.has(u.handle)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-bg-2 disabled:opacity-60">
+              <Avatar user={u} size={26} /><span className="min-w-0 flex-1 truncate">{u.name} <span className="text-muted">@{u.handle}</span></span>
+              {sent.has(u.handle) ? <Check size={14} className="text-accent" /> : <UserPlus size={14} className="text-muted" />}
+            </button>
+          </li>
+        ))}
+        {!list.length && <li className="px-2 py-3 text-center text-xs text-muted">{q.trim() ? "Никого не нашли" : "Начните вводить ник или имя"}</li>}
+      </ul>
+      <button onClick={onCopy} className="btn btn-outline mt-2 w-full py-1.5 text-xs"><Copy size={13} /> Скопировать ссылку</button>
     </div>
   );
 }

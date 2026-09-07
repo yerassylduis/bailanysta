@@ -89,7 +89,7 @@ export async function signalsSince(userId: string, callId: string, sinceIso: str
   const rows = await db.select({ s: callSignals, u: users }).from(callSignals).innerJoin(users, eq(callSignals.fromId, users.id))
     .where(and(eq(callSignals.callId, callId), gt(callSignals.createdAt, sinceIso), sql`${callSignals.fromId} != ${userId}`,
       or(isNull(callSignals.toId), eq(callSignals.toId, userId))))
-    .orderBy(callSignals.createdAt, sql`rowid`).limit(limit);
+    .orderBy(callSignals.createdAt, sql`"call_signals".rowid`).limit(limit);
   return rows.map(({ s, u }) => ({ id: s.id, type: s.type as SignalType, from: toUserDto(u), to: s.toId, payload: JSON.parse(s.payload), createdAt: s.createdAt }));
 }
 

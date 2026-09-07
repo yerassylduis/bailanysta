@@ -84,6 +84,7 @@ export const api = {
   call: (id: string) => request<{ call: CallDto; chat: SignalDto[] }>(`/api/calls/${id}`),
   joinCall: (id: string) => request<CallDto>(`/api/calls/${id}/join`, { method: "POST" }),
   leaveCall: (id: string) => request<{ ok: true }>(`/api/calls/${id}/leave`, { method: "POST" }),
+  inviteToCall: (id: string, handle: string) => request<{ ok: true; invited: string }>(`/api/calls/${id}/invite`, { method: "POST", body: JSON.stringify({ handle }) }),
   signal: (id: string, type: SignalType, to: string | null, payload: unknown) => request<{ id: string; createdAt: string }>(`/api/calls/${id}/signal`, { method: "POST", body: JSON.stringify({ type, to, payload }) }),
   deletePost: (id: string) => request<{ ok: true }>(`/api/posts/${id}`, { method: "DELETE" }),
   like: (id: string, liked: boolean) => request<{ likeCount: number; likedByViewer: boolean }>(`/api/posts/${id}/like`, { method: "PUT", body: JSON.stringify({ liked }) }),

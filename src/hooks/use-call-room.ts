@@ -50,6 +50,8 @@ export function useCallRoom(callId: string, me: UserDto | null) {
   const recTimer = useRef<number>(0);
   const meRef = useRef(me);
   const stateRef = useRef({ muted, camOff, sharing });
+  const peersRef = useRef(peers);
+  useEffect(() => { peersRef.current = peers; }, [peers]);
   useEffect(() => { meRef.current = me; }, [me]);
   useEffect(() => { stateRef.current = { muted, camOff, sharing }; }, [muted, camOff, sharing]);
 
@@ -178,7 +180,18 @@ export function useCallRoom(callId: string, me: UserDto | null) {
           setChat((c) => (c.some((m) => m.id === s.id) ? c : [...c, { id: s.id, from, text, at: s.createdAt }]));
           break;
         }
-        case "state": updatePeer(from.id, s.payload as Partial<Peer>); break;
+        case "state": {
+          const payload = s.payload as Partial<Peer> & { hello?: boolean };
+          ensurePeer(from);
+          updatePeer(from.id, { muted: payload.muted ?? false, camOff: payload.camOff ?? false, sharing: payload.sharing ?? false });
+          // новичок поздоровался, а соединения с ним нет — инициатор шлёт offer
+          const pc = pcs.current.get(from.id);
+          if (payload.hello && iAmInitiator(from.id) && (!pc || !["connected", "connecting"].includes(pc.connectionState))) {
+            if (pc) { pc.close(); pcs.current.delete(from.id); }
+            await makeOffer(from);
+          }
+          break;
+        }
       }
     } catch (e) { console.warn("[call] signal", s.type, e); }
   }, [createPc, removePeer, signal, makeOffer]);
@@ -200,15 +213,19 @@ export function useCallRoom(callId: string, me: UserDto | null) {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }, audio: { echoCancellation: true, noiseSuppression: true } });
       } catch {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true }); // без камеры — только звук
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true }); // без камеры — только звук
+        } catch {
+          stream = new MediaStream(); // совсем без устройств — только смотрим и слушаем
+          setMuted(true);
+        }
         setCamOff(true);
       }
       localRef.current = stream; camTrack.current = stream.getVideoTracks()[0] ?? null;
       setLocal(stream);
 
       // Сначала подписка — чтобы не пропустить ответы, потом регистрация
-      const since = new Date(Date.now() - 1000).toISOString();
-      const es = new EventSource(`/api/calls/${callId}/events?since=${encodeURIComponent(since)}`);
+      const es = new EventSource(`/api/calls/${callId}/events`);
       esRef.current = es;
       es.addEventListener("signal", (e) => onSignal(JSON.parse((e as MessageEvent).data)));
       es.addEventListener("participants", (e) => {
@@ -226,10 +243,35 @@ export function useCallRoom(callId: string, me: UserDto | null) {
         ensurePeer(p);
         if (iAmInitiator(p.id)) await makeOffer(p);
       }
+      // «Привет» всем: если чей-то join потерялся, инициатор увидит нас и пришлёт offer
+      await signal("state", null, { hello: true, ...stateRef.current });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось войти в звонок. Разрешите доступ к камере и микрофону.");
     }
-  }, [callId, me, makeOffer, onSignal]);
+  }, [callId, me, makeOffer, onSignal, signal]);
+
+  // Страховка: если соединение с кем-то не установилось за ~8 с, инициатор пробует заново.
+  useEffect(() => {
+    if (!joined) return;
+    const stuckSince = new Map<string, number>();
+    const t = window.setInterval(() => {
+      for (const [id, pc] of pcs.current) {
+        const ok = pc.connectionState === "connected";
+        if (ok) { stuckSince.delete(id); continue; }
+        const first = stuckSince.get(id) ?? Date.now();
+        stuckSince.set(id, first);
+        const peer = peersRef.current[id];
+        if (Date.now() - first > 8000 && peer && iAmInitiator(id)) {
+          console.warn("[call] reconnect to", peer.user.handle, pc.connectionState);
+          pc.close(); pcs.current.delete(id); pendingIce.current.delete(id); stuckSince.delete(id);
+          makeOffer(peer.user).catch(() => {});
+        }
+      }
+      // отладка в консоли: window.__blCall
+      (window as unknown as { __blCall?: unknown }).__blCall = Object.fromEntries([...pcs.current].map(([id, pc]) => [id, { conn: pc.connectionState, ice: pc.iceConnectionState, sig: pc.signalingState }]));
+    }, 2000);
+    return () => clearInterval(t);
+  }, [joined, makeOffer]);
 
   const leave = useCallback(async () => {
     esRef.current?.close(); esRef.current = null;
