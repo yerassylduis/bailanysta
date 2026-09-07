@@ -13,7 +13,7 @@ import { requireUser } from "@/lib/auth";
  */
 const STUN: RTCIceServer = { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] };
 
-let cache: { at: number; servers: RTCIceServer[] } | null = null;
+let cache: { at: number; servers: RTCIceServer[]; provider: string } | null = null;
 
 async function cloudflare(): Promise<RTCIceServer[] | null> {
   const id = process.env.CF_TURN_KEY_ID, token = process.env.CF_TURN_API_TOKEN;
@@ -48,7 +48,7 @@ const OPEN_RELAY: RTCIceServer[] = [
 export const GET = handler(async () => {
   await requireUser();
   // креды провайдеров живут долго — кэшируем на 10 минут, чтобы не дёргать API на каждый вход в комнату
-  if (cache && Date.now() - cache.at < 10 * 60_000) return ok({ iceServers: cache.servers, provider: cache.servers === OPEN_RELAY ? "open-relay" : "configured" });
+  if (cache && Date.now() - cache.at < 10 * 60_000) return ok({ iceServers: cache.servers, provider: cache.provider });
   let servers: RTCIceServer[] | null = null;
   let provider = "open-relay";
   try {
@@ -61,6 +61,6 @@ export const GET = handler(async () => {
     servers = null;
   }
   const all = [STUN, ...(servers ?? OPEN_RELAY)];
-  cache = { at: Date.now(), servers: all };
+  cache = { at: Date.now(), servers: all, provider };
   return ok({ iceServers: all, provider });
 });
