@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, like, lt, or, sql, count, gt } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { HttpError } from "./auth";
+import { HttpError, isAdmin, isBanned } from "./auth";
 import { newId, nowIso } from "./ids";
 import { extractMentions, extractTags, hueFromHandle } from "./text";
 import type { CommentDto, GraphDto, MediaDto, MeDto, NotificationDto, Page, PostDto, TrendingTag, UserDto, UserProfileDto } from "./types";
@@ -20,7 +20,12 @@ export const toUserDto = (u: User): UserDto => ({
 
 export const COVER_PRESETS = 6;
 
-export const toMeDto = (u: User): MeDto => ({ ...toUserDto(u), phone: u.phone ?? null, email: u.email ?? null, birthday: u.birthday ?? null });
+export const toMeDto = (u: User): MeDto => ({
+  ...toUserDto(u), phone: u.phone ?? null, email: u.email ?? null, birthday: u.birthday ?? null,
+  isAdmin: isAdmin(u), banned: isBanned(u) ? { until: u.bannedUntil === "forever" ? null : u.bannedUntil, reason: u.banReason ?? null } : null,
+});
+
+
 
 export const toMediaDto = (m: Media): MediaDto => ({
   id: m.id, kind: m.kind as MediaDto["kind"], mime: m.mime, url: m.url, width: m.width, height: m.height,
@@ -57,7 +62,7 @@ export async function loginOrRegister(handle: string, name?: string) {
   const existing = await findUserByHandle(handle);
   if (existing) return { user: existing, created: false };
   const user: User = {
-    id: newId(), handle, name: name?.trim() || `@${handle}`, bio: "", hue: hueFromHandle(handle), avatarUrl: null, cover: null, phone: null, email: null, birthday: null, createdAt: nowIso(),
+    id: newId(), handle, name: name?.trim() || `@${handle}`, bio: "", hue: hueFromHandle(handle), avatarUrl: null, cover: null, phone: null, email: null, birthday: null, role: "user", bannedUntil: null, banReason: null, createdAt: nowIso(),
   };
   await db.insert(users).values(user);
   return { user, created: true };
@@ -171,6 +176,8 @@ export async function listPosts(f: PostFilter, viewerId: string | null): Promise
   const db = await getDb();
   const limit = Math.min(Math.max(f.limit ?? 10, 1), 50);
   const conds = [];
+  // посты заблокированных пользователей скрыты
+  conds.push(inArray(posts.authorId, db.select({ id: users.id }).from(users).where(sql`(${users.bannedUntil} IS NULL OR (${users.bannedUntil} != 'forever' AND ${users.bannedUntil} < ${new Date().toISOString()}))`)));
 
   if (f.scope === "following" && viewerId) {
     conds.push(or(

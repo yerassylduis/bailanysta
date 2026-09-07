@@ -47,8 +47,29 @@ export class HttpError extends Error {
   }
 }
 
+/** Забанен ли пользователь сейчас (срок не истёк или навсегда). */
+export function isBanned(u: Pick<User, "bannedUntil">) {
+  if (!u.bannedUntil) return false;
+  if (u.bannedUntil === "forever") return true;
+  return new Date(u.bannedUntil).getTime() > Date.now();
+}
+
+/** Админ — по роли в базе или по списку почт ADMIN_EMAILS (через запятую) в окружении. */
+export function isAdmin(u: Pick<User, "role" | "email">) {
+  if (u.role === "admin") return true;
+  const list = (process.env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  return !!u.email && list.includes(u.email.toLowerCase());
+}
+
 export async function requireUser(): Promise<User> {
   const user = await currentUser();
   if (!user) throw new HttpError(401, "Нужно войти, чтобы это сделать");
+  if (isBanned(user)) throw new HttpError(403, `Аккаунт заблокирован${user.banReason ? `: ${user.banReason}` : ""}`);
+  return user;
+}
+
+export async function requireAdmin(): Promise<User> {
+  const user = await requireUser();
+  if (!isAdmin(user)) throw new HttpError(403, "Только для администраторов");
   return user;
 }

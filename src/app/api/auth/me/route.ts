@@ -9,8 +9,10 @@ import { unreadMessagesCount } from "@/lib/repo-messages";
 export const GET = handler(async () => {
   const user = await currentUser();
   if (!user) return ok({ user: null, unread: 0, unreadMessages: 0 });
+  const me = toMeDto(user);
+  if (me.banned) return ok({ user: me, unread: 0, unreadMessages: 0 });
   const [unread, unreadMessages] = await Promise.all([unreadCount(user.id), unreadMessagesCount(user.id)]);
-  return ok({ user: toMeDto(user), unread, unreadMessages });
+  return ok({ user: me, unread, unreadMessages });
 });
 
 const Patch = z.object({

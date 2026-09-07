@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { eq, or } from "drizzle-orm";
 import { handler, ok, parseBody } from "@/lib/http";
-import { HttpError } from "@/lib/auth";
+import { HttpError, isBanned } from "@/lib/auth";
 import { getDb, schema } from "@/db";
 import { HANDLE_RE } from "@/lib/text";
 import { BOT_HANDLE } from "@/lib/bot";
@@ -45,8 +45,9 @@ export const POST = handler(async (req) => {
   if (!body.target) throw new HttpError(400, "Введите почту");
   const t = normalizeTarget(body.target);
   if (t.channel !== "email") throw new HttpError(400, "Вход по почте: введите адрес электронной почты");
-  const [user] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, t.target)).limit(1);
+  const [user] = await db.select().from(schema.users).where(eq(schema.users.email, t.target)).limit(1);
   if (!user) throw new HttpError(404, "Аккаунт с такой почтой не найден. Зарегистрируйтесь");
+  if (isBanned(user)) throw new HttpError(403, `Аккаунт заблокирован${user.banReason ? `: ${user.banReason}` : ""}${user.bannedUntil && user.bannedUntil !== "forever" ? ` до ${new Date(user.bannedUntil).toLocaleDateString("ru-RU")}` : ""}`);
   const res = await issueCode(t.target, t.channel, "login");
   return ok({ ...res, target: t.target, channel: t.channel });
 });

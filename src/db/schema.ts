@@ -21,6 +21,21 @@ export const users = sqliteTable("users", {
   email: text("email"),
   /** День рождения, ISO-дата YYYY-MM-DD */
   birthday: text("birthday"),
+  /** Роль: user | admin */
+  role: text("role").notNull().default("user"),
+  /** Бан: до какого момента (ISO) или "forever"; null — не забанен */
+  bannedUntil: text("banned_until"),
+  banReason: text("ban_reason"),
+  createdAt: text("created_at").notNull(),
+});
+
+/** Журнал действий администраторов. */
+export const adminLog = sqliteTable("admin_log", {
+  id: text("id").primaryKey(),
+  adminId: text("admin_id").notNull(),
+  action: text("action").notNull(),
+  targetId: text("target_id"),
+  details: text("details"),
   createdAt: text("created_at").notNull(),
 });
 

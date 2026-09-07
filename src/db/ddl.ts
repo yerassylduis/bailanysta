@@ -15,6 +15,17 @@ export const DDL: string[] = [
     phone TEXT,
     email TEXT,
     birthday TEXT,
+    role TEXT NOT NULL DEFAULT 'user',
+    banned_until TEXT,
+    ban_reason TEXT,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS admin_log (
+    id TEXT PRIMARY KEY,
+    admin_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    target_id TEXT,
+    details TEXT,
     created_at TEXT NOT NULL
   )`,
   `CREATE TABLE IF NOT EXISTS otp_codes (
@@ -183,6 +194,9 @@ export const SOFT_MIGRATIONS: string[] = [
   `ALTER TABLE users ADD COLUMN phone TEXT`,
   `ALTER TABLE users ADD COLUMN email TEXT`,
   `ALTER TABLE users ADD COLUMN birthday TEXT`,
+  `ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'`,
+  `ALTER TABLE users ADD COLUMN banned_until TEXT`,
+  `ALTER TABLE users ADD COLUMN ban_reason TEXT`,
   `CREATE UNIQUE INDEX IF NOT EXISTS users_phone_idx ON users(phone)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS users_email_idx ON users(email)`,
   `ALTER TABLE conversations ADD COLUMN is_group INTEGER NOT NULL DEFAULT 0`,

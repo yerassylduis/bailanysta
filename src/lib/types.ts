@@ -13,7 +13,18 @@ export type UserDto = {
 };
 
 /** Приватные данные своего профиля (видит только владелец). */
-export type MeDto = UserDto & { phone: string | null; email: string | null; birthday: string | null };
+export type MeDto = UserDto & { phone: string | null; email: string | null; birthday: string | null; isAdmin: boolean; banned: { until: string | null; reason: string | null } | null };
+
+/* --------------------------------- админ -------------------------------- */
+
+export type AdminUserDto = MeDto & {
+  role: "user" | "admin";
+  stats: { posts: number; followers: number; comments: number };
+  lastActivityAt: string | null;
+};
+
+export type AdminLogDto = { id: string; admin: UserDto | null; action: string; targetId: string | null; details: string | null; createdAt: string };
+export type AdminStatsDto = { users: number; banned: number; posts: number; comments: number; messages: number; calls: number; today: { users: number; posts: number } };
 
 export type UserProfileDto = UserDto & {
   stats: { posts: number; followers: number; following: number; likesReceived: number };

@@ -4,7 +4,7 @@ import { handler, parseBody } from "@/lib/http";
 import { HANDLE_RE } from "@/lib/text";
 import { findUserByHandle, toUserDto } from "@/lib/repo";
 import { DEMO_HANDLES } from "@/db/seed";
-import { SESSION_COOKIE, makeSessionToken } from "@/lib/auth";
+import { SESSION_COOKIE, isBanned, makeSessionToken } from "@/lib/auth";
 import { ensureWelcome } from "@/lib/repo-messages";
 import { BOT_HANDLE } from "@/lib/bot";
 import { HttpError } from "@/lib/auth";
@@ -23,6 +23,7 @@ export const POST = handler(async (req) => {
   if (handle === BOT_HANDLE) throw new HttpError(400, "Этот ник занят помощником 🙂");
   const user = await findUserByHandle(handle);
   if (!user) throw new HttpError(404, "Такого аккаунта нет — зарегистрируйтесь");
+  if (isBanned(user)) throw new HttpError(403, `Аккаунт заблокирован${user.banReason ? `: ${user.banReason}` : ""}`);
   const legacy = !user.phone && !user.email;
   if (!DEMO_HANDLES.includes(handle) && !legacy) throw new HttpError(403, "Войдите по телефону или почте — вам придёт код");
   await ensureWelcome(user);

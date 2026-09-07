@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Compass, Home, LogIn, Moon, Search, Sun, UserRound, Sparkles, Command, MessageCircle, Bookmark, Video, Volume2, VolumeX } from "lucide-react";
+import { Bell, Compass, Home, LogIn, Moon, Search, Sun, UserRound, Sparkles, Command, MessageCircle, Bookmark, Video, Volume2, VolumeX, ShieldCheck, Ban } from "lucide-react";
 import { useSyncExternalStore } from "react";
 import { setSoundEnabled, soundEnabled, subscribeSound } from "@/lib/sound";
-import { useMe } from "@/hooks/use-data";
+import { useLogout, useMe } from "@/hooks/use-data";
 import { useTheme } from "./providers";
 import { Avatar, Logo } from "./ui";
 import { cn } from "@/lib/format";
@@ -41,8 +41,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     me
       ? { href: `/u/${me.handle}`, label: "Профиль", icon: UserRound, badge: 0, match: (p: string) => p === `/u/${me.handle}` }
       : { href: "/login", label: "Войти", icon: LogIn, badge: 0, match: (p: string) => p.startsWith("/login") },
+    ...(me?.isAdmin ? [{ href: "/admin", label: "Админ", icon: ShieldCheck, badge: 0, match: (p: string) => p.startsWith("/admin") }] : []),
   ];
-  const mobileItems = items.filter((i) => i.href !== "/bookmarks" && i.href !== "/calls");
+  const mobileItems = items.filter((i) => i.href !== "/bookmarks" && i.href !== "/calls" && i.href !== "/admin");
+
+  // Заблокированный аккаунт: вместо приложения — объяснение и кнопка выхода
+  if (me?.banned) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-6">
+        <div className="card max-w-md p-8 text-center">
+          <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-rose-soft text-rose"><Ban size={28} /></span>
+          <h1 className="font-display text-2xl font-bold">Аккаунт заблокирован</h1>
+          <p className="mt-2 text-sm text-ink-2">{me.banned.until ? `До ${new Date(me.banned.until).toLocaleString("ru-RU", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}` : "Без срока"}{me.banned.reason ? ` · причина: ${me.banned.reason}` : ""}</p>
+          <p className="mt-3 text-xs text-muted">Если вы считаете, что это ошибка, напишите администратору на почту сети.</p>
+          <BannedLogout />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-full">
@@ -172,4 +188,9 @@ export function SoundToggle() {
       {on ? <Volume2 size={19} /> : <VolumeX size={19} />}
     </button>
   );
+}
+
+function BannedLogout() {
+  const logout = useLogout();
+  return <button onClick={() => logout.mutate()} className="btn btn-outline mt-5">Выйти из аккаунта</button>;
 }

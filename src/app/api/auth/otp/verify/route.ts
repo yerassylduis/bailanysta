@@ -2,7 +2,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { handler, parseBody } from "@/lib/http";
-import { HttpError, SESSION_COOKIE, makeSessionToken } from "@/lib/auth";
+import { HttpError, SESSION_COOKIE, isBanned, makeSessionToken } from "@/lib/auth";
 import { getDb, schema } from "@/db";
 import { newId, nowIso } from "@/lib/ids";
 import { hueFromHandle } from "@/lib/text";
@@ -26,12 +26,13 @@ export const POST = handler(async (req) => {
     // повторная проверка уникальности — между запросом кода и вводом кто-то мог занять ник
     const [clash] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.handle, p.handle)).limit(1);
     if (clash) throw new HttpError(409, "Этот ник уже заняли. Начните регистрацию заново");
-    user = { id: newId(), handle: p.handle, name: p.name, bio: "", hue: hueFromHandle(p.handle), avatarUrl: null, cover: null, phone: p.phone, email: p.email, birthday: p.birthday, createdAt: nowIso() };
+    user = { id: newId(), handle: p.handle, name: p.name, bio: "", hue: hueFromHandle(p.handle), avatarUrl: null, cover: null, phone: p.phone, email: p.email, birthday: p.birthday, role: "user", bannedUntil: null, banReason: null, createdAt: nowIso() };
     await db.insert(schema.users).values(user);
     created = true;
   } else {
     [user] = await db.select().from(schema.users).where(eq(schema.users.email, target)).limit(1);
     if (!user) throw new HttpError(404, "Аккаунт не найден");
+    if (isBanned(user)) throw new HttpError(403, `Аккаунт заблокирован${user.banReason ? `: ${user.banReason}` : ""}${user.bannedUntil && user.bannedUntil !== "forever" ? ` до ${new Date(user.bannedUntil).toLocaleDateString("ru-RU")}` : ""}`);
   }
   await ensureWelcome(user);
   const res = NextResponse.json({ user: toMeDto(user), created }, { status: created ? 201 : 200 });

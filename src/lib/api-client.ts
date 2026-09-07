@@ -1,4 +1,4 @@
-import type { CallDto, CommentDto, ConversationDto, GraphDto, MeDto, MediaDto, MessageDto, MuseRequest, MuseResponse, NotificationDto, Page, PostDto, SignalDto, SignalType, TrendingTag, UserDto, UserProfileDto } from "./types";
+import type { AdminLogDto, AdminStatsDto, AdminUserDto, CallDto, CommentDto, ConversationDto, GraphDto, MeDto, MediaDto, MessageDto, MuseRequest, MuseResponse, NotificationDto, Page, PostDto, SignalDto, SignalType, TrendingTag, UserDto, UserProfileDto } from "./types";
 
 /** Тонкий типизированный клиент к собственному API. Единственная точка fetch на клиенте. */
 
@@ -90,6 +90,16 @@ export const api = {
   joinCall: (id: string) => request<CallDto>(`/api/calls/${id}/join`, { method: "POST" }),
   leaveCall: (id: string) => request<{ ok: true }>(`/api/calls/${id}/leave`, { method: "POST" }),
   iceServers: () => request<{ iceServers: RTCIceServer[] }>("/api/calls/ice"),
+  /* ------------------------------- админ ------------------------------- */
+  adminUsers: (q: string, page: number, filter: "all" | "banned" | "admins") => request<{ total: number; page: number; pageSize: number; items: AdminUserDto[] }>(`/api/admin/users${qs({ q, page, filter })}`),
+  adminCreateUser: (body: Record<string, unknown>) => request<AdminUserDto>("/api/admin/users", { method: "POST", body: JSON.stringify(body) }),
+  adminUpdateUser: (id: string, body: Record<string, unknown>) => request<AdminUserDto>(`/api/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  adminDeleteUser: (id: string) => request<{ ok: true }>(`/api/admin/users/${id}`, { method: "DELETE" }),
+  adminBan: (id: string, days: number | null, reason: string) => request<AdminUserDto>(`/api/admin/users/${id}/ban`, { method: "POST", body: JSON.stringify({ days, reason }) }),
+  adminUnban: (id: string) => request<AdminUserDto>(`/api/admin/users/${id}/ban`, { method: "DELETE" }),
+  adminStats: () => request<AdminStatsDto>("/api/admin/stats"),
+  adminLog: () => request<{ items: AdminLogDto[] }>("/api/admin/log"),
+  adminDeletePost: (id: string) => request<{ ok: true }>(`/api/admin/posts/${id}`, { method: "DELETE" }),
   inviteToCall: (id: string, handle: string) => request<{ ok: true; invited: string }>(`/api/calls/${id}/invite`, { method: "POST", body: JSON.stringify({ handle }) }),
   signal: (id: string, type: SignalType, to: string | null, payload: unknown) => request<{ id: string; createdAt: string }>(`/api/calls/${id}/signal`, { method: "POST", body: JSON.stringify({ type, to, payload }) }),
   deletePost: (id: string) => request<{ ok: true }>(`/api/posts/${id}`, { method: "DELETE" }),
