@@ -406,6 +406,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
     const timer = window.setInterval(draw, 1000 / 20);
     const out = canvas.captureStream(20);
     const ac = new AudioContext();
+    ac.resume().catch(() => {});
     const dest = ac.createMediaStreamDestination();
     const addAudio = (s: MediaStream | null) => { if (s && s.getAudioTracks().length) ac.createMediaStreamSource(new MediaStream(s.getAudioTracks())).connect(dest); };
     addAudio(localRef.current);
@@ -491,16 +492,26 @@ export function useCallRoom(callId: string, me: UserDto | null) {
     screenStream.current?.getTracks().forEach((t) => t.stop());
     screenStream.current = null;
     await swapVideoTrack(camTrack.current);
+    for (const pc of pcs.current.values()) {
+      const sender = pc.getSenders().find((x) => x.track?.kind === "video");
+      if (sender) { const prm = sender.getParameters(); prm.degradationPreference = "balanced"; if (prm.encodings?.[0]) delete prm.encodings[0].maxBitrate; sender.setParameters(prm).catch(() => {}); }
+    }
     setSharing(false); signal("state", null, { sharing: false });
   }, [swapVideoTrack, signal]);
 
   const startShare = useCallback(async () => {
     try {
-      const s = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 15 }, audio: false });
+      const s = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 30, max: 30 }, width: { max: 1920 }, height: { max: 1080 } }, audio: false });
       screenStream.current = s;
       const track = s.getVideoTracks()[0];
+      try { track.contentHint = "detail"; } catch {}
       track.onended = () => { stopShare(); };
       await swapVideoTrack(track);
+      // для экрана держим разрешение (текст читаем), а не частоту кадров
+      for (const pc of pcs.current.values()) {
+        const sender = pc.getSenders().find((x) => x.track === track);
+        if (sender) { const prm = sender.getParameters(); prm.degradationPreference = "maintain-resolution"; if (prm.encodings?.[0]) prm.encodings[0].maxBitrate = 2_500_000; sender.setParameters(prm).catch(() => {}); }
+      }
       setSharing(true); signal("state", null, { sharing: true });
     } catch (e) { console.warn("[call] share cancelled", e); }
   }, [swapVideoTrack, signal, stopShare]);
