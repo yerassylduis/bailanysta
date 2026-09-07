@@ -366,7 +366,8 @@ export function useCallRoom(callId: string, me: UserDto | null) {
   /**
    * Запись: композиция плиток на canvas + микс всех аудиодорожек.
    * Если кто-то показывает экран — экран во весь кадр, камеры полоской снизу; иначе сетка.
-   * Рисуем по requestAnimationFrame (не чаще 20 к/с), кодек VP8 — легче для процессора, чем VP9.
+   * Рисуем таймером 20 к/с (requestAnimationFrame замирает в фоновой вкладке — запись получалась бы пустой),
+   * кодек VP8 — легче для процессора, чем VP9.
    */
   const startRecording = useCallback(() => {
     if (typeof MediaRecorder === "undefined") { setError("Этот браузер не поддерживает запись (MediaRecorder)"); return; }
@@ -383,10 +384,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
       const ar = v.videoWidth / v.videoHeight; let tw = w, th = w / ar; if (th > h) { th = h; tw = h * ar; }
       try { ctx.drawImage(v, x + (w - tw) / 2, y + (h - th) / 2, tw, th); } catch {}
     };
-    let last = 0, raf = 0;
-    const draw = (t: number) => {
-      raf = requestAnimationFrame(draw);
-      if (t - last < 1000 / 20) return; last = t;
+    const draw = () => {
       const vs = videos();
       ctx.fillStyle = "#070b18"; ctx.fillRect(0, 0, W, H);
       const share = vs.find((v) => v.dataset.sharing === "1");
@@ -404,7 +402,8 @@ export function useCallRoom(callId: string, me: UserDto | null) {
         vs.forEach((v, i) => { const x = (i % cols) * cw, y = Math.floor(i / cols) * ch; fit(v, x, y, cw, ch); label(v.dataset.callTile ?? "", x, y + ch, cw); });
       }
     };
-    raf = requestAnimationFrame(draw);
+    draw();
+    const timer = window.setInterval(draw, 1000 / 20);
     const out = canvas.captureStream(20);
     const ac = new AudioContext();
     const dest = ac.createMediaStreamDestination();
@@ -419,7 +418,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
     const rec = new MediaRecorder(out, mime ? { mimeType: mime, videoBitsPerSecond: 3_000_000, audioBitsPerSecond: 128_000 } : undefined);
     rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
     rec.onstop = () => {
-      cancelAnimationFrame(raf); ac.close().catch(() => {});
+      clearInterval(timer); ac.close().catch(() => {});
       const url = URL.createObjectURL(new Blob(chunks, { type: mime || "video/webm" }));
       setRecordingUrl(url); setRecordingExt(ext); setRecording(false);
       // скачиваем сразу из хука — работает и при выходе из звонка, когда экран уже размонтирован
