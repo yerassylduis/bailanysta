@@ -27,12 +27,21 @@ export function subscribeSound(cb: () => void) {
   return () => { window.removeEventListener(EVENT, cb); window.removeEventListener("storage", cb); };
 }
 
-/** Проигрывает звук; не чаще раза в 400 мс, чтобы пачка событий не превращалась в трель. */
+const LAST_KEY = "bl_sound_last";
+const WINDOW_MS = 2000;
+
+/**
+ * Проигрывает звук не чаще раза в 2 с. Окно общее для всех вкладок (метка в localStorage):
+ * если открыто две вкладки, сигнал прозвучит один раз, а не из каждой.
+ */
 export function playNotify(force = false) {
   if (!force && !soundEnabled()) return;
   const now = Date.now();
-  if (now - last < 400) return;
+  let shared = 0;
+  try { shared = Number(localStorage.getItem(LAST_KEY) || 0); } catch {}
+  if (!force && (now - last < WINDOW_MS || now - shared < WINDOW_MS)) return;
   last = now;
+  try { localStorage.setItem(LAST_KEY, String(now)); } catch {}
   try {
     if (!audio) { audio = new Audio("/sounds/notify.wav"); audio.volume = 0.7; audio.preload = "auto"; }
     audio.currentTime = 0;

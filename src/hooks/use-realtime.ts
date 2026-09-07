@@ -27,6 +27,14 @@ export function useRealtime(enabled: boolean, toast: (text: string, kind?: "info
   const pathRef = useRef(pathname);
   useEffect(() => { pathRef.current = pathname; }, [pathname]);
   const baseTitle = useRef<string | null>(null);
+  /** id уже озвученных событий — на случай повторной доставки при переподключении потока. */
+  const seen = useRef(new Set<string>());
+  const fresh = (ids: string[]) => {
+    const n = ids.filter((id) => !seen.current.has(id));
+    for (const id of n) seen.current.add(id);
+    if (seen.current.size > 500) seen.current = new Set([...seen.current].slice(-250));
+    return n.length > 0;
+  };
 
   useEffect(() => {
     if (!enabled || typeof EventSource === "undefined") return;
@@ -51,17 +59,17 @@ export function useRealtime(enabled: boolean, toast: (text: string, kind?: "info
       setCounts(d.unread, d.unreadMessages);
       qc.invalidateQueries({ queryKey: keys.notifications });
       if (d.items.some((n) => n.type === "follow")) qc.invalidateQueries({ queryKey: ["profile"] });
-      if (d.items.length) playNotify();
+      if (fresh(d.items.map((n) => n.id))) playNotify();
       if (!pathRef.current.startsWith("/notifications")) {
         for (const n of d.items.slice(-3)) toast(`${n.actor.name} ${TEXT[n.type] ?? "— новое событие"}`, "success");
       }
     });
 
     es.addEventListener("messages", (e) => {
-      const d = JSON.parse((e as MessageEvent).data) as { items: Array<{ from: UserDto; text: string; conversationId: string; group: { id: string; title: string } | null }>; unreadMessages: number };
+      const d = JSON.parse((e as MessageEvent).data) as { items: Array<{ id: string; from: UserDto; text: string; conversationId: string; group: { id: string; title: string } | null }>; unreadMessages: number };
       setCounts(undefined, d.unreadMessages);
       qc.invalidateQueries({ queryKey: keys.conversations });
-      if (d.items.length) playNotify();
+      if (fresh(d.items.map((m) => m.id))) playNotify();
       for (const m of d.items.slice(-3)) {
         if (m.group) {
           qc.invalidateQueries({ queryKey: keys.groupMessages(m.group.id) });
