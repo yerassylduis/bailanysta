@@ -271,7 +271,8 @@ function Tile({ user, stream, me, muted, camOff, sharing, version, connected, st
     if (!el) return;
     if (el.srcObject !== stream) { el.srcObject = stream; console.info("[call] tile", user.handle, "srcObject set:", stream ? stream.getTracks().map((t) => t.kind).join("+") : "null"); }
     // Автовоспроизведение со звуком браузер может запретить — тогда покажем кнопку
-    el.play().then(() => setBlocked(false)).catch((e) => { console.warn("[call] play blocked", user.handle, e?.name); setBlocked(true); });
+    // AbortError — нормальная отмена play() при смене дорожек, это не блокировка автовоспроизведения
+    el.play().then(() => setBlocked(false)).catch((e) => { if (e?.name === "AbortError") return; console.warn("[call] play blocked", user.handle, e?.name); setBlocked(true); });
   }, [stream, version, user.handle]);
   const videoTrack = stream?.getVideoTracks()[0];
   const hasVideo = !!videoTrack && videoTrack.readyState === "live" && !videoTrack.muted && !camOff;
