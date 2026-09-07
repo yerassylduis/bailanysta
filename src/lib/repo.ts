@@ -3,7 +3,7 @@ import { getDb, schema } from "@/db";
 import { HttpError } from "./auth";
 import { newId, nowIso } from "./ids";
 import { extractMentions, extractTags, hueFromHandle } from "./text";
-import type { CommentDto, GraphDto, MediaDto, NotificationDto, Page, PostDto, TrendingTag, UserDto, UserProfileDto } from "./types";
+import type { CommentDto, GraphDto, MediaDto, MeDto, NotificationDto, Page, PostDto, TrendingTag, UserDto, UserProfileDto } from "./types";
 import type { Media, User } from "@/db/schema";
 import { BOT_HANDLE } from "./bot";
 
@@ -19,6 +19,8 @@ export const toUserDto = (u: User): UserDto => ({
 });
 
 export const COVER_PRESETS = 6;
+
+export const toMeDto = (u: User): MeDto => ({ ...toUserDto(u), phone: u.phone ?? null, email: u.email ?? null, birthday: u.birthday ?? null });
 
 export const toMediaDto = (m: Media): MediaDto => ({
   id: m.id, kind: m.kind as MediaDto["kind"], mime: m.mime, url: m.url, width: m.width, height: m.height,
@@ -55,17 +57,28 @@ export async function loginOrRegister(handle: string, name?: string) {
   const existing = await findUserByHandle(handle);
   if (existing) return { user: existing, created: false };
   const user: User = {
-    id: newId(), handle, name: name?.trim() || `@${handle}`, bio: "", hue: hueFromHandle(handle), avatarUrl: null, cover: null, createdAt: nowIso(),
+    id: newId(), handle, name: name?.trim() || `@${handle}`, bio: "", hue: hueFromHandle(handle), avatarUrl: null, cover: null, phone: null, email: null, birthday: null, createdAt: nowIso(),
   };
   await db.insert(users).values(user);
   return { user, created: true };
 }
 
-export async function updateProfile(userId: string, patch: { name?: string; bio?: string; avatarMediaId?: string | null; coverMediaId?: string | null; coverPreset?: number | null }) {
+export async function updateProfile(userId: string, patch: { name?: string; bio?: string; avatarMediaId?: string | null; coverMediaId?: string | null; coverPreset?: number | null; phone?: string; email?: string; birthday?: string }) {
   const db = await getDb();
   const set: Partial<User> = {};
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.bio !== undefined) set.bio = patch.bio;
+  if (patch.phone !== undefined) {
+    const [taken] = await db.select({ id: users.id }).from(users).where(and(eq(users.phone, patch.phone), sql`${users.id} != ${userId}`)).limit(1);
+    if (taken) throw new HttpError(409, "Этот номер уже привязан к другому аккаунту");
+    set.phone = patch.phone;
+  }
+  if (patch.email !== undefined) {
+    const [taken] = await db.select({ id: users.id }).from(users).where(and(eq(users.email, patch.email), sql`${users.id} != ${userId}`)).limit(1);
+    if (taken) throw new HttpError(409, "Эта почта уже привязана к другому аккаунту");
+    set.email = patch.email;
+  }
+  if (patch.birthday !== undefined) set.birthday = patch.birthday;
   // Аватар: null — убрать, id — взять URL загруженного пользователем изображения.
   if (patch.avatarMediaId !== undefined) {
     if (patch.avatarMediaId === null) set.avatarUrl = null;

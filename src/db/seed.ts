@@ -1,4 +1,4 @@
-import { count } from "drizzle-orm";
+import { and, count, eq, isNull } from "drizzle-orm";
 import type { drizzle } from "drizzle-orm/libsql";
 import * as schema from "./schema";
 import { newId } from "@/lib/ids";
@@ -12,13 +12,16 @@ type Db = ReturnType<typeof drizzle<typeof schema>>;
  * при первом запуске. Выполняется один раз, когда таблица users пуста.
  */
 const DEMO_USERS = [
-  { handle: "aisha", name: "Айша Нурлан", bio: "Пишу о степи, дизайне и тишине. Алматы ⛰" },
-  { handle: "daniyar", name: "Данияр Ахмет", bio: "ML-инженер. Учу нейросети говорить по-казахски." },
-  { handle: "tomiris", name: "Томирис Сейт", bio: "Продукт, люди, кофе. Ищу смысл в бэклоге." },
-  { handle: "arman", name: "Арман Бек", bio: "Фотограф. Ловлю свет между Астаной и Тянь-Шанем." },
-  { handle: "saule", name: "Сәуле Қайрат", bio: "Пишу стихи и код — иногда одновременно." },
-  { handle: "nursultan", name: "Нурсултан Ж.", bio: "Основатель nFactorial-мечты. Люблю ранние утра." },
+  { handle: "aisha", name: "Айша Нурлан", bio: "Пишу о степи, дизайне и тишине. Алматы ⛰", phone: "+77010000001", email: "aisha@demo.bailanysta.kz", birthday: "1999-03-14" },
+  { handle: "daniyar", name: "Данияр Ахмет", bio: "ML-инженер. Учу нейросети говорить по-казахски.", phone: "+77010000002", email: "daniyar@demo.bailanysta.kz", birthday: "1997-11-02" },
+  { handle: "tomiris", name: "Томирис Сейт", bio: "Продукт, люди, кофе. Ищу смысл в бэклоге.", phone: "+77010000003", email: "tomiris@demo.bailanysta.kz", birthday: "2000-06-21" },
+  { handle: "arman", name: "Арман Бек", bio: "Фотограф. Ловлю свет между Астаной и Тянь-Шанем.", phone: "+77010000004", email: "arman@demo.bailanysta.kz", birthday: "1995-01-30" },
+  { handle: "saule", name: "Сәуле Қайрат", bio: "Пишу стихи и код — иногда одновременно.", phone: "+77010000005", email: "saule@demo.bailanysta.kz", birthday: "2001-09-09" },
+  { handle: "nursultan", name: "Нурсултан Ж.", bio: "Основатель nFactorial-мечты. Люблю ранние утра.", phone: "+77010000006", email: "nursultan@demo.bailanysta.kz", birthday: "1990-05-05" },
 ];
+
+/** Ники демо-аккаунтов: для них разрешён вход одним нажатием без кода (для проверяющих). */
+export const DEMO_HANDLES = DEMO_USERS.map((u) => u.handle);
 
 const DEMO_POSTS: Array<{ by: string; text: string; mood: string | null; hoursAgo: number }> = [
   { by: "aisha", text: "Степь учит одному: пространство — это не пустота, а возможность. #степь #дизайн", mood: "oi", hoursAgo: 2 },
@@ -54,7 +57,7 @@ export async function seedIfEmpty(db: Db) {
     const id = newId();
     ids.set(u.handle, id);
     await db.insert(schema.users).values({
-      id, handle: u.handle, name: u.name, bio: u.bio, hue: hueFromHandle(u.handle),
+      id, handle: u.handle, name: u.name, bio: u.bio, hue: hueFromHandle(u.handle), phone: u.phone, email: u.email, birthday: u.birthday,
       createdAt: new Date(now - 1000 * 60 * 60 * 24 * 30).toISOString(),
     });
   }
@@ -102,4 +105,9 @@ export async function ensureBot(db: Db) {
     id: "bot_komekshi", handle: BOT_PROFILE.handle, name: BOT_PROFILE.name, bio: BOT_PROFILE.bio,
     hue: hueFromHandle(BOT_PROFILE.handle), createdAt: new Date(0).toISOString(),
   }).onConflictDoNothing();
+  // Контакты демо-аккаунтов в уже существующих базах (созданных до появления входа по коду)
+  for (const u of DEMO_USERS) {
+    await db.update(schema.users).set({ phone: u.phone, email: u.email, birthday: u.birthday })
+      .where(and(eq(schema.users.handle, u.handle), isNull(schema.users.email)));
+  }
 }

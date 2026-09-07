@@ -2,7 +2,8 @@ import { z } from "zod";
 import { NextResponse } from "next/server";
 import { handler, parseBody } from "@/lib/http";
 import { HANDLE_RE } from "@/lib/text";
-import { loginOrRegister, toUserDto } from "@/lib/repo";
+import { findUserByHandle, toUserDto } from "@/lib/repo";
+import { DEMO_HANDLES } from "@/db/seed";
 import { SESSION_COOKIE, makeSessionToken } from "@/lib/auth";
 import { ensureWelcome } from "@/lib/repo-messages";
 import { BOT_HANDLE } from "@/lib/bot";
@@ -13,13 +14,20 @@ const Body = z.object({
   name: z.string().trim().max(60).optional(),
 });
 
-/** Вход или регистрация по нику. Ставит подписанную cookie сессии. */
+/**
+ * Быстрый вход по нику — только для демо-аккаунтов (кнопки на экране входа) и старых аккаунтов
+ * без телефона/почты. Все остальные входят по коду: /api/auth/otp/*.
+ */
 export const POST = handler(async (req) => {
-  const { handle, name } = await parseBody(req, Body);
+  const { handle } = await parseBody(req, Body);
   if (handle === BOT_HANDLE) throw new HttpError(400, "Этот ник занят помощником 🙂");
-  const { user, created } = await loginOrRegister(handle, name);
+  const user = await findUserByHandle(handle);
+  if (!user) throw new HttpError(404, "Такого аккаунта нет — зарегистрируйтесь");
+  const legacy = !user.phone && !user.email;
+  if (!DEMO_HANDLES.includes(handle) && !legacy) throw new HttpError(403, "Войдите по телефону или почте — вам придёт код");
   await ensureWelcome(user);
-  const res = NextResponse.json({ user: toUserDto(user), created }, { status: created ? 201 : 200 });
+  const created = false;
+  const res = NextResponse.json({ user: toUserDto(user), created }, { status: 200 });
   res.cookies.set(SESSION_COOKIE, makeSessionToken(user.id), {
     httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 24 * 90,
   });

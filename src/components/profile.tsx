@@ -24,6 +24,9 @@ export function Profile({ handle }: { handle: string }) {
   const [edit, setEdit] = useState(false);
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [birthday, setBirthday] = useState("");
   const [saving, setSaving] = useState(false);
   const avatarUp = useUpload({ images: 1, videos: 0 }, { maxSide: 512 });
   const coverUp = useUpload({ images: 1, videos: 0 }, { maxSide: 1600 });
@@ -56,11 +59,11 @@ export function Profile({ handle }: { handle: string }) {
   const p = q.data;
   const own = meData?.user?.id === p.id;
 
-  const startEdit = () => { setName(p.name); setBio(p.bio); setEdit(true); };
+  const startEdit = () => { setName(p.name); setBio(p.bio); setPhone(meData?.user?.phone ?? ""); setEmail(meData?.user?.email ?? ""); setBirthday(meData?.user?.birthday ?? ""); setEdit(true); };
   const save = async () => {
     setSaving(true);
     try {
-      await api.updateProfile({ name: name.trim() || p.name, bio: bio.trim() });
+      await api.updateProfile({ name: name.trim() || p.name, bio: bio.trim(), ...(phone.trim() ? { phone: phone.trim() } : {}), ...(email.trim() ? { email: email.trim() } : {}), ...(birthday ? { birthday } : {}) });
       await Promise.all([qc.invalidateQueries({ queryKey: keys.profile(handle) }), qc.invalidateQueries({ queryKey: keys.me }), qc.invalidateQueries({ queryKey: ["posts"] })]);
       setEdit(false); toast("Профиль обновлён", "success");
     } catch (e) { toast(e instanceof Error ? e.message : "Ошибка", "error"); }
@@ -120,6 +123,12 @@ export function Profile({ handle }: { handle: string }) {
             <div className="mt-4 space-y-2">
               <input value={name} onChange={(e) => setName(e.target.value)} className="input font-semibold" maxLength={60} placeholder="Имя" />
               <textarea value={bio} onChange={(e) => setBio(e.target.value)} className="input resize-none" rows={2} maxLength={200} placeholder="Пара слов о себе" />
+              <div className="grid gap-2 sm:grid-cols-3">
+                <label className="block"><span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted">Телефон</span><input value={phone} onChange={(e) => setPhone(e.target.value)} className="input" placeholder="+7 701 000 00 00" inputMode="tel" /></label>
+                <label className="block"><span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted">Почта</span><input value={email} onChange={(e) => setEmail(e.target.value)} className="input" placeholder="you@mail.kz" inputMode="email" /></label>
+                <label className="block"><span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted">Дата рождения</span><input type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} className="input" /></label>
+              </div>
+              <p className="text-[11px] text-muted">Телефон и почта используются для входа по коду; другим пользователям они не показываются.</p>
               <div className="flex justify-end"><button onClick={save} disabled={saving} className="btn btn-primary"><Check size={16} /> Сохранить</button></div>
             </div>
           ) : (

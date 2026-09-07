@@ -16,8 +16,32 @@ export const users = sqliteTable("users", {
   avatarUrl: text("avatar_url"),
   /** Обложка профиля: URL медиа или "preset:N" — один из встроенных градиентов. */
   cover: text("cover"),
+  /** Контакты для входа по коду: телефон в формате E.164, почта в нижнем регистре. */
+  phone: text("phone"),
+  email: text("email"),
+  /** День рождения, ISO-дата YYYY-MM-DD */
+  birthday: text("birthday"),
   createdAt: text("created_at").notNull(),
 });
+
+/** Одноразовые коды входа/регистрации. Храним только хэш кода. */
+export const otpCodes = sqliteTable(
+  "otp_codes",
+  {
+    id: text("id").primaryKey(),
+    /** нормализованный телефон или почта */
+    target: text("target").notNull(),
+    channel: text("channel").notNull(), // sms | email
+    purpose: text("purpose").notNull(), // login | register
+    codeHash: text("code_hash").notNull(),
+    /** для регистрации — JSON с данными будущего профиля */
+    payload: text("payload"),
+    attempts: integer("attempts").notNull().default(0),
+    expiresAt: text("expires_at").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("otp_target_idx").on(t.target, t.createdAt)],
+);
 
 export const posts = sqliteTable(
   "posts",

@@ -12,6 +12,9 @@ export type UserDto = {
   createdAt: string;
 };
 
+/** Приватные данные своего профиля (видит только владелец). */
+export type MeDto = UserDto & { phone: string | null; email: string | null; birthday: string | null };
+
 export type UserProfileDto = UserDto & {
   stats: { posts: number; followers: number; following: number; likesReceived: number };
   viewerFollows: boolean;

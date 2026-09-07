@@ -1,4 +1,4 @@
-import type { CallDto, CommentDto, ConversationDto, GraphDto, MediaDto, MessageDto, MuseRequest, MuseResponse, NotificationDto, Page, PostDto, SignalDto, SignalType, TrendingTag, UserDto, UserProfileDto } from "./types";
+import type { CallDto, CommentDto, ConversationDto, GraphDto, MeDto, MediaDto, MessageDto, MuseRequest, MuseResponse, NotificationDto, Page, PostDto, SignalDto, SignalType, TrendingTag, UserDto, UserProfileDto } from "./types";
 
 /** Тонкий типизированный клиент к собственному API. Единственная точка fetch на клиенте. */
 
@@ -35,11 +35,16 @@ const qs = (o: Record<string, string | number | null | undefined>) => {
 };
 
 export const api = {
-  me: () => request<{ user: UserDto | null; unread: number; unreadMessages: number }>("/api/auth/me"),
-  login: (handle: string, name?: string) => request<{ user: UserDto; created: boolean }>("/api/auth/login", { method: "POST", body: JSON.stringify({ handle, name }) }),
+  me: () => request<{ user: MeDto | null; unread: number; unreadMessages: number }>("/api/auth/me"),
+  /** Быстрый вход по нику — только демо-аккаунты */
+  login: (handle: string) => request<{ user: UserDto; created: boolean }>("/api/auth/login", { method: "POST", body: JSON.stringify({ handle }) }),
+  /** Код для входа (target) или регистрации (register + via) */
+  otpRequest: (body: { target?: string; register?: { handle: string; name: string; phone: string; email: string; birthday: string }; via?: "sms" | "email" }) =>
+    request<{ delivery: "sent" | "screen"; code?: string; expiresInSec: number; target: string; channel: "sms" | "email" }>("/api/auth/otp/request", { method: "POST", body: JSON.stringify(body) }),
+  otpVerify: (target: string, code: string) => request<{ user: MeDto; created: boolean }>("/api/auth/otp/verify", { method: "POST", body: JSON.stringify({ target, code }) }),
   logout: () => request<{ ok: true }>("/api/auth/logout", { method: "POST" }),
-  updateProfile: (patch: { name?: string; bio?: string; avatarMediaId?: string | null; coverMediaId?: string | null; coverPreset?: number | null }) =>
-    request<{ user: UserDto }>("/api/auth/me", { method: "PATCH", body: JSON.stringify(patch) }),
+  updateProfile: (patch: { name?: string; bio?: string; avatarMediaId?: string | null; coverMediaId?: string | null; coverPreset?: number | null; phone?: string; email?: string; birthday?: string }) =>
+    request<{ user: MeDto }>("/api/auth/me", { method: "PATCH", body: JSON.stringify(patch) }),
 
   posts: (f: { scope?: string; author?: string; q?: string; tag?: string; mood?: string; cursor?: string | null; limit?: number }) =>
     request<Page<PostDto>>(`/api/posts${qs(f)}`),

@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { handler, ok, parseBody } from "@/lib/http";
 import { currentUser, requireUser } from "@/lib/auth";
-import { toUserDto, unreadCount, updateProfile } from "@/lib/repo";
+import { toMeDto, unreadCount, updateProfile } from "@/lib/repo";
+import { normalizeTarget } from "@/lib/otp";
 import { unreadMessagesCount } from "@/lib/repo-messages";
 
 /** Текущий пользователь + число непрочитанных уведомлений (для шапки). */
@@ -9,7 +10,7 @@ export const GET = handler(async () => {
   const user = await currentUser();
   if (!user) return ok({ user: null, unread: 0, unreadMessages: 0 });
   const [unread, unreadMessages] = await Promise.all([unreadCount(user.id), unreadMessagesCount(user.id)]);
-  return ok({ user: toUserDto(user), unread, unreadMessages });
+  return ok({ user: toMeDto(user), unread, unreadMessages });
 });
 
 const Patch = z.object({
@@ -20,10 +21,15 @@ const Patch = z.object({
   /** обложка: своя картинка (id медиа) ИЛИ встроенный градиент (0..5); null — сбросить */
   coverMediaId: z.string().nullable().optional(),
   coverPreset: z.number().int().min(0).max(5).nullable().optional(),
+  phone: z.string().trim().min(10).optional(),
+  email: z.string().trim().min(5).optional(),
+  birthday: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 export const PATCH = handler(async (req) => {
   const user = await requireUser();
   const patch = await parseBody(req, Patch);
-  return ok({ user: toUserDto(await updateProfile(user.id, patch)) });
+  if (patch.phone !== undefined) { const t = normalizeTarget(patch.phone); if (t.channel !== "sms") throw new Error("phone"); patch.phone = t.target; }
+  if (patch.email !== undefined) { const t = normalizeTarget(patch.email); if (t.channel !== "email") throw new Error("email"); patch.email = t.target; }
+  return ok({ user: toMeDto(await updateProfile(user.id, patch)) });
 });
