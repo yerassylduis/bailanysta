@@ -7,6 +7,7 @@ import { api } from "@/lib/api-client";
 import type { NotificationDto, PostDto, UserDto } from "@/lib/types";
 import { PENDING_KEY, isPlainAllFeed, keys, patchPostEverywhere, prependToAllFeed, removePostEverywhere } from "./use-data";
 import { ApiError } from "@/lib/api-client";
+import { playNotify } from "@/lib/sound";
 
 /**
  * Подписка на /api/events (SSE). Обновляет счётчики в шапке, инвалидирует списки,
@@ -50,6 +51,7 @@ export function useRealtime(enabled: boolean, toast: (text: string, kind?: "info
       setCounts(d.unread, d.unreadMessages);
       qc.invalidateQueries({ queryKey: keys.notifications });
       if (d.items.some((n) => n.type === "follow")) qc.invalidateQueries({ queryKey: ["profile"] });
+      if (d.items.length) playNotify();
       if (!pathRef.current.startsWith("/notifications")) {
         for (const n of d.items.slice(-3)) toast(`${n.actor.name} ${TEXT[n.type] ?? "— новое событие"}`, "success");
       }
@@ -59,6 +61,7 @@ export function useRealtime(enabled: boolean, toast: (text: string, kind?: "info
       const d = JSON.parse((e as MessageEvent).data) as { items: Array<{ from: UserDto; text: string; conversationId: string; group: { id: string; title: string } | null }>; unreadMessages: number };
       setCounts(undefined, d.unreadMessages);
       qc.invalidateQueries({ queryKey: keys.conversations });
+      if (d.items.length) playNotify();
       for (const m of d.items.slice(-3)) {
         if (m.group) {
           qc.invalidateQueries({ queryKey: keys.groupMessages(m.group.id) });

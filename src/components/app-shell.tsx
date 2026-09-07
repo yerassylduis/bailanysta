@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Compass, Home, LogIn, Moon, Search, Sun, UserRound, Sparkles, Command, MessageCircle, Bookmark, Video } from "lucide-react";
+import { Bell, Compass, Home, LogIn, Moon, Search, Sun, UserRound, Sparkles, Command, MessageCircle, Bookmark, Video, Volume2, VolumeX } from "lucide-react";
+import { useSyncExternalStore } from "react";
+import { setSoundEnabled, soundEnabled, subscribeSound } from "@/lib/sound";
 import { useMe } from "@/hooks/use-data";
 import { useTheme } from "./providers";
 import { Avatar, Logo } from "./ui";
@@ -65,7 +67,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {me && <Link href="/?compose=1" className="btn btn-primary mt-5 py-3 text-[15px] shadow-card"><Sparkles size={18} /> Написать</Link>}
 
           <div className="mt-auto space-y-3 pt-6">
-            <ThemeToggle />
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1"><ThemeToggle /></div>
+              <SoundToggle />
+            </div>
             {me ? (
               <Link href={`/u/${me.handle}`} className="card flex items-center gap-3 p-2.5 transition hover:border-line-strong">
                 <Avatar user={me} size={36} />
@@ -87,6 +92,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link href="/" className="flex items-center gap-2"><Logo size={28} /><Wordmark compact /></Link>
             <div className="flex items-center gap-0.5">
               <button onClick={palette.open} className="btn btn-ghost btn-icon" aria-label="Поиск"><Search size={21} /></button>
+              <SoundToggle />
               <ThemeToggle compact />
             </div>
           </header>
@@ -155,5 +161,15 @@ export function Wordmark({ compact }: { compact?: boolean }) {
       <span className="block text-[10px] font-bold uppercase tracking-[0.22em] text-accent">Expert</span>
       <span className={cn("block font-display font-bold tracking-tight", compact ? "text-base" : "text-lg")}>Bailanysta</span>
     </span>
+  );
+}
+
+/** Звук уведомлений: вкл/выкл, хранится в localStorage. */
+export function SoundToggle() {
+  const on = useSyncExternalStore(subscribeSound, soundEnabled, () => true);
+  return (
+    <button onClick={() => setSoundEnabled(!on)} className={cn("btn btn-ghost btn-icon shrink-0", !on && "text-muted")} aria-label={on ? "Выключить звук уведомлений" : "Включить звук уведомлений"} title={on ? "Звук уведомлений включён" : "Звук уведомлений выключен"}>
+      {on ? <Volume2 size={19} /> : <VolumeX size={19} />}
+    </button>
   );
 }
