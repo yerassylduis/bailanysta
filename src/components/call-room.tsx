@@ -273,7 +273,8 @@ function Tile({ user, stream, me, muted, camOff, sharing, version, connected, st
     el.play().then(() => setBlocked(false)).catch((e) => { if (e?.name === "AbortError") return; console.warn("[call] play blocked", user.handle, e?.name); setBlocked(true); });
   }, [stream, version, user.handle]);
   const videoTrack = stream?.getVideoTracks()[0];
-  const hasVideo = !!videoTrack && videoTrack.readyState === "live" && !videoTrack.muted && !camOff;
+  // при демонстрации показываем видео, даже если камера участника выключена — это его экран
+  const hasVideo = !!videoTrack && videoTrack.readyState === "live" && !videoTrack.muted && (!camOff || sharing);
   const noFrames = !compact && !me && connected && hasVideo && stats && stats.framesDecoded === 0 && stats.videoBytes === 0;
   return (
     <div className={cn("relative h-full min-h-0 w-full overflow-hidden border border-line bg-black", compact ? "rounded-xl" : "rounded-2xl")}>
