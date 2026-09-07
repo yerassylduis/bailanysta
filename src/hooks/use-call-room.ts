@@ -43,6 +43,8 @@ export function useCallRoom(callId: string, me: UserDto | null) {
   const iceRef = useRef<RTCConfiguration>(FALLBACK_ICE);
   const pcs = useRef(new Map<string, RTCPeerConnection>());
   const pendingIce = useRef(new Map<string, RTCIceCandidateInit[]>());
+  /** Поколение соединения с каждым собеседником: answer к чужому поколению игнорируется. */
+  const gen = useRef(new Map<string, number>());
   const makingOffer = useRef(new Set<string>());
   const localRef = useRef<MediaStream | null>(null);
   const camTrack = useRef<MediaStreamTrack | null>(null);
@@ -80,16 +82,21 @@ export function useCallRoom(callId: string, me: UserDto | null) {
     if (existing && existing.connectionState !== "closed") return existing;
     const pc = new RTCPeerConnection(iceRef.current);
     pcs.current.set(user.id, pc);
+    gen.current.set(user.id, (gen.current.get(user.id) ?? 0) + 1);
     ensurePeer(user);
-    // Всегда добавляем аудио и видео трансиверы, чтобы у обеих сторон был симметричный набор
-    const audio = localRef.current?.getAudioTracks()[0] ?? null;
-    const video = localRef.current?.getVideoTracks()[0] ?? null;
-    pc.addTransceiver(audio ? audio : "audio", { direction: "sendrecv", streams: localRef.current ? [localRef.current] : [] });
-    pc.addTransceiver(video ? video : "video", { direction: "sendrecv", streams: localRef.current ? [localRef.current] : [] });
+    // ВАЖНО: локальные дорожки — через addTrack. Только такие трансиверы отвечающая сторона
+    // сопоставляет с m-line входящего offer (спецификация WebRTC); addTransceiver дал бы recvonly-ответ
+    // и инициатор не получил бы ни звука, ни видео. Для отсутствующих локально видов —
+    // трансивер «только приём», чтобы всё равно видеть и слышать собеседника.
+    const local = localRef.current;
+    const kinds = new Set<string>();
+    for (const t of local?.getTracks() ?? []) { pc.addTrack(t, local!); kinds.add(t.kind); }
+    for (const kind of ["audio", "video"] as const) if (!kinds.has(kind)) pc.addTransceiver(kind, { direction: "recvonly" });
 
     pc.onicecandidate = (e) => { if (e.candidate) signal("ice", user.id, e.candidate.toJSON()); };
     pc.ontrack = (e) => {
       const stream = e.streams[0] ?? new MediaStream([e.track]);
+      console.info("[call] track ←", user.handle, e.track.kind, "streams:", e.streams.length, "tracks in stream:", stream.getTracks().length);
       // каждая дорожка — новая версия, чтобы плитка перерисовалась (video появляется после audio)
       updatePeer(user.id, { stream, version: Date.now() });
       e.track.onunmute = () => updatePeer(user.id, { version: Date.now() });
@@ -97,13 +104,10 @@ export function useCallRoom(callId: string, me: UserDto | null) {
       e.track.onended = () => updatePeer(user.id, { version: Date.now() });
     };
     pc.onconnectionstatechange = () => {
-      const st = pc.connectionState;
-      updatePeer(user.id, { connected: st === "connected" });
-      if (st === "failed" && iAmInitiator(user.id)) {
-        // перезапуск ICE — только инициатор, иначе будет glare
-        pc.createOffer({ iceRestart: true }).then(async (o) => { await pc.setLocalDescription(o); await signal("offer", user.id, { sdp: pc.localDescription, state: stateRef.current, restart: true }); }).catch(() => {});
-      }
+      updatePeer(user.id, { connected: pc.connectionState === "connected" });
+      console.info("[call]", user.handle, "connection:", pc.connectionState, "ice:", pc.iceConnectionState);
     };
+    pc.oniceconnectionstatechange = () => console.info("[call]", user.handle, "ice:", pc.iceConnectionState);
     return pc;
   }, [signal]);
 
@@ -114,16 +118,19 @@ export function useCallRoom(callId: string, me: UserDto | null) {
     setPeers((p) => { const n = { ...p }; delete n[id]; return n; });
   }, []);
 
-  const makeOffer = useCallback(async (user: UserDto) => {
+  /** Offer собеседнику. restart=true — ICE-restart на том же соединении (без пересоздания). */
+  const makeOffer = useCallback(async (user: UserDto, restart = false) => {
     const pc = createPc(user);
     if (makingOffer.current.has(user.id)) return;
     makingOffer.current.add(user.id);
     try {
-      const offer = await pc.createOffer();
+      const offer = await pc.createOffer(restart ? { iceRestart: true } : undefined);
       await pc.setLocalDescription(offer);
       // offer уходит ДО кандидатов: они появляются асинхронно, но даже если обгонят — буфер на другой стороне их сохранит
-      await signal("offer", user.id, { sdp: pc.localDescription, state: stateRef.current });
-    } finally { makingOffer.current.delete(user.id); }
+      await signal("offer", user.id, { sdp: pc.localDescription, state: stateRef.current, gen: gen.current.get(user.id) ?? 1, restart });
+      console.info("[call] offer →", user.handle, restart ? "(ice-restart)" : "", "gen", gen.current.get(user.id));
+    } catch (e) { console.warn("[call] makeOffer", e); }
+    finally { makingOffer.current.delete(user.id); }
   }, [createPc, signal]);
 
   const onSignal = useCallback(async (s: SignalDto) => {
@@ -133,41 +140,46 @@ export function useCallRoom(callId: string, me: UserDto | null) {
     try {
       switch (s.type) {
         case "join": {
+          // Собеседник вошёл (или перезагрузил страницу): старое соединение с ним больше не валидно
+          if (pcs.current.has(from.id)) { pcs.current.get(from.id)!.close(); pcs.current.delete(from.id); pendingIce.current.delete(from.id); }
           ensurePeer(from);
-          // Новичок сам пришлёт offer тем, кто уже в комнате; но если по правилу инициатор — мы, шлём сами
           if (iAmInitiator(from.id)) await makeOffer(from);
           break;
         }
         case "leave": removePeer(from.id); break;
         case "offer": {
-          const { sdp, state, restart } = s.payload as { sdp: RTCSessionDescriptionInit; state?: Partial<Peer>; restart?: boolean };
+          const { sdp, state, gen: theirGen, restart } = s.payload as { sdp: RTCSessionDescriptionInit; state?: Partial<Peer>; gen?: number; restart?: boolean };
           let pc = pcs.current.get(from.id);
           if (!pc || pc.connectionState === "closed") pc = createPc(from);
-          const glare = pc.signalingState === "have-local-offer";
-          if (glare) {
-            if (iAmInitiator(from.id)) break; // невежливый: игнорируем их offer, они примут наш
-            await pc.setLocalDescription({ type: "rollback" }); // вежливый: откатываемся и принимаем
+          if (pc.signalingState === "have-local-offer") {
+            // встречные offer: невежливый (инициатор) игнорирует чужой, вежливый откатывается и принимает
+            if (iAmInitiator(from.id)) { console.info("[call] glare: ignore offer from", from.handle); break; }
+            await pc.setLocalDescription({ type: "rollback" });
           }
-          if (!restart && pc.signalingState === "stable" && pc.remoteDescription && pc.connectionState === "connected") {
-            // повторный offer к живому соединению (например, после переподключения собеседника) — пересоздаём
-            pc.close(); pcs.current.delete(from.id); pc = createPc(from);
+          // Обычный offer к уже живому соединению (не ICE-restart) — собеседник начал заново: пересоздаём
+          if (!restart && pc.remoteDescription && pc.signalingState === "stable") {
+            pc.close(); pcs.current.delete(from.id); pendingIce.current.delete(from.id); pc = createPc(from);
           }
           await pc.setRemoteDescription(sdp);
           await flushIce(from.id);
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          await signal("answer", from.id, { sdp: pc.localDescription, state: stateRef.current });
-          if (state) updatePeer(from.id, state);
+          await signal("answer", from.id, { sdp: pc.localDescription, state: stateRef.current, gen: theirGen ?? null });
+          console.info("[call] answer →", from.handle, "for gen", theirGen, restart ? "(ice-restart)" : "");
+          if (state) updatePeer(from.id, { muted: !!state.muted, camOff: !!state.camOff, sharing: !!state.sharing });
           break;
         }
         case "answer": {
-          const { sdp, state } = s.payload as { sdp: RTCSessionDescriptionInit; state?: Partial<Peer> };
+          const { sdp, state, gen: forGen } = s.payload as { sdp: RTCSessionDescriptionInit; state?: Partial<Peer>; gen?: number | null };
           const pc = pcs.current.get(from.id);
+          const myGen = gen.current.get(from.id);
+          if (forGen != null && myGen != null && forGen !== myGen) { console.info("[call] stale answer from", from.handle, "gen", forGen, "≠", myGen); break; }
           if (pc && pc.signalingState === "have-local-offer") {
             await pc.setRemoteDescription(sdp);
             await flushIce(from.id);
-          }
-          if (state) updatePeer(from.id, state);
+            console.info("[call] answer ←", from.handle, "applied");
+          } else console.info("[call] answer ←", from.handle, "ignored, state", pc?.signalingState);
+          if (state) updatePeer(from.id, { muted: !!state.muted, camOff: !!state.camOff, sharing: !!state.sharing });
           break;
         }
         case "ice": {
@@ -175,6 +187,17 @@ export function useCallRoom(callId: string, me: UserDto | null) {
           const cand = s.payload as RTCIceCandidateInit;
           if (pc && pc.remoteDescription) await pc.addIceCandidate(cand).catch((e) => console.warn("[call] ice", e));
           else pendingIce.current.set(from.id, [...(pendingIce.current.get(from.id) ?? []), cand]);
+          break;
+        }
+        case "state": {
+          const payload = s.payload as Partial<Peer> & { hello?: boolean };
+          ensurePeer(from);
+          if (payload.muted !== undefined || payload.camOff !== undefined || payload.sharing !== undefined) {
+            updatePeer(from.id, { muted: !!payload.muted, camOff: !!payload.camOff, sharing: !!payload.sharing });
+          }
+          // «привет» новичка: если соединения с ним ещё НЕТ вообще (join потерялся) — инициатор шлёт offer.
+          // Если соединение уже есть (в любом состоянии) — ничего не трогаем: оно договаривается.
+          if (payload.hello && iAmInitiator(from.id) && !pcs.current.has(from.id)) await makeOffer(from);
           break;
         }
         case "chat": {
@@ -254,25 +277,27 @@ export function useCallRoom(callId: string, me: UserDto | null) {
     }
   }, [callId, me, makeOffer, onSignal, signal]);
 
-  // Страховка: если соединение с кем-то не установилось за ~8 с, инициатор пробует заново.
+  // Страховка: инициатор перезапускает ICE, если соединение упало или не собралось за 20 с.
   useEffect(() => {
     if (!joined) return;
     const stuckSince = new Map<string, number>();
     const t = window.setInterval(() => {
       for (const [id, pc] of pcs.current) {
-        const ok = pc.connectionState === "connected";
-        if (ok) { stuckSince.delete(id); continue; }
+        const st = pc.connectionState;
+        if (st === "connected") { stuckSince.delete(id); continue; }
         const first = stuckSince.get(id) ?? Date.now();
         stuckSince.set(id, first);
         const peer = peersRef.current[id];
-        if (Date.now() - first > 8000 && peer && iAmInitiator(id)) {
-          console.warn("[call] reconnect to", peer.user.handle, pc.connectionState);
-          pc.close(); pcs.current.delete(id); pendingIce.current.delete(id); stuckSince.delete(id);
-          makeOffer(peer.user).catch(() => {});
+        const waited = Date.now() - first;
+        const broken = st === "failed" || st === "disconnected";
+        if (peer && iAmInitiator(id) && (broken || waited > 20_000) && pc.signalingState === "stable") {
+          console.warn("[call] ice-restart with", peer.user.handle, st, Math.round(waited / 1000) + "s");
+          stuckSince.set(id, Date.now());
+          makeOffer(peer.user, true).catch(() => {});
         }
       }
-      // отладка в консоли: window.__blCall
-      (window as unknown as { __blCall?: unknown }).__blCall = Object.fromEntries([...pcs.current].map(([id, pc]) => [id, { conn: pc.connectionState, ice: pc.iceConnectionState, gather: pc.iceGatheringState, sig: pc.signalingState, hasRemote: !!pc.remoteDescription }]));
+      (window as unknown as { __blPcs?: unknown }).__blPcs = pcs.current;
+      (window as unknown as { __blCall?: unknown }).__blCall = Object.fromEntries([...pcs.current].map(([id, pc]) => [id, { conn: pc.connectionState, ice: pc.iceConnectionState, gather: pc.iceGatheringState, sig: pc.signalingState, hasRemote: !!pc.remoteDescription, gen: gen.current.get(id) }]));
     }, 2000);
     return () => clearInterval(t);
   }, [joined, makeOffer]);

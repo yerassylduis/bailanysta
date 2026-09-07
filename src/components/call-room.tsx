@@ -130,10 +130,10 @@ function Tile({ user, stream, me, muted, camOff, sharing, version, connected }: 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (el.srcObject !== stream) el.srcObject = stream;
+    if (el.srcObject !== stream) { el.srcObject = stream; console.info("[call] tile", user.handle, "srcObject set:", stream ? stream.getTracks().map((t) => t.kind).join("+") : "null"); }
     // после смены дорожек браузер может остановить воспроизведение — запускаем явно
     el.play().catch(() => {});
-  }, [stream, version]);
+  }, [stream, version, user.handle]);
   const videoTrack = stream?.getVideoTracks()[0];
   const hasVideo = !!videoTrack && videoTrack.readyState === "live" && !videoTrack.muted && !camOff;
   return (
