@@ -423,6 +423,22 @@ export async function listNotifications(userId: string, limit = 30): Promise<{ i
   };
 }
 
+/** Новые уведомления после момента `sinceIso` (для realtime-потока). */
+export async function notificationsSince(userId: string, sinceIso: string, limit = 10): Promise<NotificationDto[]> {
+  const db = await getDb();
+  const rows = await db.select({ n: notifications, actor: users, postText: posts.text })
+    .from(notifications)
+    .innerJoin(users, eq(notifications.actorId, users.id))
+    .leftJoin(posts, eq(notifications.postId, posts.id))
+    .where(and(eq(notifications.userId, userId), gt(notifications.createdAt, sinceIso)))
+    .orderBy(notifications.createdAt)
+    .limit(limit);
+  return rows.map(({ n, actor, postText }) => ({
+    id: n.id, type: n.type as NotificationDto["type"], read: n.read === 1, createdAt: n.createdAt, actor: toUserDto(actor),
+    post: n.postId ? { id: n.postId, excerpt: (postText ?? "").slice(0, 80) } : null,
+  }));
+}
+
 export async function unreadCount(userId: string) {
   const db = await getDb();
   const [{ n }] = await db.select({ n: count() }).from(notifications).where(and(eq(notifications.userId, userId), eq(notifications.read, 0)));

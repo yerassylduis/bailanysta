@@ -9,6 +9,8 @@ import { Avatar, Logo } from "./ui";
 import { cn } from "@/lib/format";
 import { RightRail } from "./right-rail";
 import { CommandPalette, useCommandPalette } from "./command-palette";
+import { useRealtime } from "@/hooks/use-realtime";
+import { useToast } from "./toast";
 
 /**
  * Каркас: слева навигация (≥ md), в центре контент, справа «рельс» (≥ xl).
@@ -22,6 +24,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const unreadMsgs = data?.unreadMessages ?? 0;
   const palette = useCommandPalette();
   const isChat = /^\/messages\/.+/.test(pathname);
+  const toast = useToast();
+  useRealtime(!!me, toast); // живые уведомления и сообщения без перезагрузки
 
   const items = [
     { href: "/", label: "Лента", icon: Home, badge: 0, match: (p: string) => p === "/" || p.startsWith("/post") },

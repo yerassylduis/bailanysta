@@ -148,3 +148,19 @@ export async function ensureWelcome(user: User) {
   await db.insert(messages).values({ id: newId(), conversationId: conv.id, senderId: bot.id, text: WELCOME(user.name.split(/\s+/)[0] || user.name), mediaId: null, createdAt: now });
   await markRead(conv.id, bot.id);
 }
+
+/** Новые входящие сообщения после `sinceIso` — кто написал и первые слова (для realtime-потока). */
+export async function incomingMessagesSince(userId: string, sinceIso: string, limit = 5) {
+  const db = await getDb();
+  const rows = await db.select({ m: messages, sender: users })
+    .from(messages)
+    .innerJoin(conversations, eq(messages.conversationId, conversations.id))
+    .innerJoin(users, eq(messages.senderId, users.id))
+    .where(and(
+      or(eq(conversations.userA, userId), eq(conversations.userB, userId)),
+      sql`${messages.senderId} != ${userId}`,
+      gt(messages.createdAt, sinceIso),
+    ))
+    .orderBy(asc(messages.createdAt)).limit(limit);
+  return rows.map(({ m, sender }) => ({ id: m.id, createdAt: m.createdAt, from: toUserDto(sender), text: m.text || (m.mediaId ? "📎 Медиа" : "") }));
+}

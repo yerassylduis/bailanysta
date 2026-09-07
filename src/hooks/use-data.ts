@@ -191,7 +191,7 @@ export function useFollow(handle: string) {
 }
 
 export function useNotifications(enabled: boolean) {
-  return useQuery({ queryKey: keys.notifications, queryFn: api.notifications, enabled, refetchInterval: 20_000 });
+  return useQuery({ queryKey: keys.notifications, queryFn: api.notifications, enabled, refetchInterval: 60_000 });
 }
 
 export function useMarkRead() {
