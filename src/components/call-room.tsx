@@ -29,6 +29,7 @@ export function CallRoom({ id }: { id: string }) {
   const previewRef = useRef<HTMLVideoElement>(null);
   useEffect(() => { if (previewRef.current && previewRef.current.srcObject !== room.local) { previewRef.current.srcObject = room.local; previewRef.current.play().catch(() => {}); } }, [room.local, room.joined]);
   const leaveAndGo = async () => { await room.leave(); router.push("/calls"); };
+
   const [chatOpen, setChatOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [diagOpen, setDiagOpen] = useState(false);
@@ -76,7 +77,8 @@ export function CallRoom({ id }: { id: string }) {
   const cols = n <= 1 ? 1 : n <= 4 ? 2 : 3;
   // Сцена: закреплённый участник, иначе тот, кто показывает экран. Свой экран на сцену не ставим:
   // если на нём открыт этот же звонок, получается бесконечное «зеркало» — как в Meet, своя презентация идёт миниатюрой.
-  const stageId = pinned ?? tiles.find((t) => t.sharing && !t.me)?.id ?? null;
+  // Во время записи своя демонстрация тоже идёт на сцену — в записи и на экране экран занимает всё
+  const stageId = pinned ?? tiles.find((t) => t.sharing && !t.me)?.id ?? (room.recording && room.sharing ? "me" : null);
   const stage = tiles.find((t) => t.id === stageId) ?? null;
   const thumbs = stage ? tiles.filter((t) => t.id !== stage.id) : [];
 
@@ -149,6 +151,7 @@ export function CallRoom({ id }: { id: string }) {
               <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center">
                 <span className="pointer-events-auto flex items-center gap-2 rounded-full bg-accent px-3 py-1.5 text-xs font-semibold text-accent-ink shadow-card">
                   <MonitorUp size={14} /> Вы показываете экран — участники его видят
+                  <button onClick={() => setPinned("me")} className="rounded-full bg-black/20 px-2 py-0.5 hover:bg-black/30">Показать крупно</button>
                   <button onClick={room.stopShare} className="rounded-full bg-black/20 px-2 py-0.5 hover:bg-black/30">Остановить</button>
                 </span>
               </div>
@@ -247,7 +250,7 @@ function Tile({ user, stream, me, muted, camOff, sharing, version, connected, st
   const noFrames = !compact && !me && connected && hasVideo && stats && stats.framesDecoded === 0 && stats.videoBytes === 0;
   return (
     <div className={cn("relative h-full min-h-0 w-full overflow-hidden border border-line bg-black", compact ? "rounded-xl" : "rounded-2xl")}>
-      <video ref={ref} data-call-tile={user.name} autoPlay playsInline muted={me} className={cn("h-full w-full", fit === "contain" || sharing ? "object-contain" : "object-cover", !hasVideo && "opacity-0", me && !sharing && "scale-x-[-1]")} />
+      <video ref={ref} data-call-tile={user.name} data-sharing={sharing ? "1" : undefined} autoPlay playsInline muted={me} className={cn("h-full w-full", fit === "contain" || sharing ? "object-contain" : "object-cover", !hasVideo && "opacity-0", me && !sharing && "scale-x-[-1]")} />
       {!hasVideo && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg-2 px-4 text-center">
           <Avatar user={user} size={compact ? 36 : 72} />

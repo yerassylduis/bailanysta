@@ -59,7 +59,6 @@ export function useCallRoom(callId: string, me: UserDto | null) {
   const screenStream = useRef<MediaStream | null>(null);
   const esRef = useRef<EventSource | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
-  const recTimer = useRef<number>(0);
   const meRef = useRef(me);
   const stateRef = useRef({ muted, camOff, sharing });
   const onRecordingRef = useRef<((by: string) => void) | null>(null);
@@ -364,41 +363,63 @@ export function useCallRoom(callId: string, me: UserDto | null) {
     return () => clearInterval(t);
   }, [joined, makeOffer]);
 
-  /** Запись: сетка видео на canvas + микс всех аудиодорожек. */
+  /**
+   * Запись: композиция плиток на canvas + микс всех аудиодорожек.
+   * Если кто-то показывает экран — экран во весь кадр, камеры полоской снизу; иначе сетка.
+   * Рисуем по requestAnimationFrame (не чаще 20 к/с), кодек VP8 — легче для процессора, чем VP9.
+   */
   const startRecording = useCallback(() => {
     if (typeof MediaRecorder === "undefined") { setError("Этот браузер не поддерживает запись (MediaRecorder)"); return; }
+    const W = 1280, H = 720, STRIP = 150;
     const canvas = document.createElement("canvas");
-    canvas.width = 1280; canvas.height = 720;
-    const ctx = canvas.getContext("2d")!;
-    const videos = () => Array.from(document.querySelectorAll<HTMLVideoElement>("video[data-call-tile]"));
-    recTimer.current = window.setInterval(() => {
-      const vs = videos().filter((v) => v.videoWidth > 0 && v.readyState >= 2);
-      ctx.fillStyle = "#070b18"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-      const n = Math.max(vs.length, 1), cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n / cols);
-      const cw = canvas.width / cols, ch = canvas.height / rows;
-      vs.forEach((v, i) => {
-        const x = (i % cols) * cw, y = Math.floor(i / cols) * ch;
-        const ar = v.videoWidth / v.videoHeight, tw = Math.min(cw, ch * ar), th = tw / ar;
-        try { ctx.drawImage(v, x + (cw - tw) / 2, y + (ch - th) / 2, tw, th); } catch {}
-        ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(x + 8, y + ch - 34, Math.min(cw - 16, 240), 26);
-        ctx.fillStyle = "#fff"; ctx.font = "14px system-ui"; ctx.fillText(v.dataset.callTile ?? "", x + 14, y + ch - 15);
-      });
-    }, 1000 / 15);
-    const out = canvas.captureStream(15);
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext("2d", { alpha: false })!;
+    const videos = () => Array.from(document.querySelectorAll<HTMLVideoElement>("video[data-call-tile]")).filter((v) => v.videoWidth > 0 && v.readyState >= 2);
+    const label = (text: string, x: number, y: number, w: number) => {
+      ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(x + 8, y - 30, Math.min(w - 16, 260), 24);
+      ctx.fillStyle = "#fff"; ctx.font = "13px system-ui"; ctx.fillText(text, x + 14, y - 12);
+    };
+    const fit = (v: HTMLVideoElement, x: number, y: number, w: number, h: number) => {
+      const ar = v.videoWidth / v.videoHeight; let tw = w, th = w / ar; if (th > h) { th = h; tw = h * ar; }
+      try { ctx.drawImage(v, x + (w - tw) / 2, y + (h - th) / 2, tw, th); } catch {}
+    };
+    let last = 0, raf = 0;
+    const draw = (t: number) => {
+      raf = requestAnimationFrame(draw);
+      if (t - last < 1000 / 20) return; last = t;
+      const vs = videos();
+      ctx.fillStyle = "#070b18"; ctx.fillRect(0, 0, W, H);
+      const share = vs.find((v) => v.dataset.sharing === "1");
+      if (share) {
+        const cams = vs.filter((v) => v !== share);
+        const mainH = cams.length ? H - STRIP : H;
+        fit(share, 0, 0, W, mainH); label(`${share.dataset.callTile} · экран`, 0, mainH, W);
+        if (cams.length) {
+          const cw = Math.min(200, (W - 16) / cams.length), ch = STRIP - 16;
+          cams.forEach((v, i) => { const x = 8 + i * cw; fit(v, x, mainH + 8, cw - 8, ch); label(v.dataset.callTile ?? "", x, mainH + 8 + ch, cw - 8); });
+        }
+      } else {
+        const n = Math.max(vs.length, 1), cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n / cols);
+        const cw = W / cols, ch = H / rows;
+        vs.forEach((v, i) => { const x = (i % cols) * cw, y = Math.floor(i / cols) * ch; fit(v, x, y, cw, ch); label(v.dataset.callTile ?? "", x, y + ch, cw); });
+      }
+    };
+    raf = requestAnimationFrame(draw);
+    const out = canvas.captureStream(20);
     const ac = new AudioContext();
     const dest = ac.createMediaStreamDestination();
     const addAudio = (s: MediaStream | null) => { if (s && s.getAudioTracks().length) ac.createMediaStreamSource(new MediaStream(s.getAudioTracks())).connect(dest); };
     addAudio(localRef.current);
-    Object.values(peers).forEach((p) => addAudio(p.stream));
+    Object.values(peersRef.current).forEach((p) => addAudio(p.stream));
     dest.stream.getAudioTracks().forEach((t) => out.addTrack(t));
-    const candidates = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"];
+    const candidates = ["video/webm;codecs=vp8,opus", "video/webm;codecs=vp9,opus", "video/webm", "video/mp4"];
     const mime = candidates.find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
     const ext = mime.startsWith("video/mp4") ? "mp4" : "webm";
     const chunks: Blob[] = [];
-    const rec = new MediaRecorder(out, mime ? { mimeType: mime, videoBitsPerSecond: 2_500_000 } : undefined);
+    const rec = new MediaRecorder(out, mime ? { mimeType: mime, videoBitsPerSecond: 3_000_000, audioBitsPerSecond: 128_000 } : undefined);
     rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
     rec.onstop = () => {
-      clearInterval(recTimer.current); ac.close().catch(() => {});
+      cancelAnimationFrame(raf); ac.close().catch(() => {});
       const url = URL.createObjectURL(new Blob(chunks, { type: mime || "video/webm" }));
       setRecordingUrl(url); setRecordingExt(ext); setRecording(false);
       // скачиваем сразу из хука — работает и при выходе из звонка, когда экран уже размонтирован
@@ -411,7 +432,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
     setRecordingUrl(null); setRecording(true);
     signal("state", null, { recording: true });
     announceRecording(meRef.current?.name ?? "Вы");
-  }, [peers, callId, signal]);
+  }, [callId, signal]);
 
   const stopResolve = useRef<(() => void) | null>(null);
   /** Останавливает запись и ждёт, пока файл будет собран и скачан. */
