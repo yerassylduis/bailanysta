@@ -23,18 +23,26 @@ export function CallRoom({ id }: { id: string }) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [diagOpen, setDiagOpen] = useState(false);
   const [pinned, setPinned] = useState<string | null>(null);
-  const [fs, setFs] = useState(false);
+  const [fsTarget, setFsTarget] = useState<"root" | "stage" | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const onFs = () => setFs(!!document.fullscreenElement);
+    const onFs = () => {
+      const el = document.fullscreenElement;
+      setFsTarget(!el ? null : el === stageRef.current ? "stage" : el === rootRef.current ? "root" : null);
+    };
     document.addEventListener("fullscreenchange", onFs);
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
-  const toggleFullscreen = (el: HTMLElement | null) => {
+  const fs = fsTarget === "root";
+  /** Полноэкранный режим для конкретного элемента: повторное нажатие сворачивает, нажатие другой кнопки переключает элемент. */
+  const toggleFullscreen = async (el: HTMLElement | null) => {
     if (!el) return;
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    else el.requestFullscreen().catch(() => toast("Браузер не разрешил полноэкранный режим"));
+    try {
+      if (document.fullscreenElement === el) { await document.exitFullscreen(); return; }
+      if (document.fullscreenElement) await document.exitFullscreen();
+      await el.requestFullscreen({ navigationUI: "hide" } as FullscreenOptions);
+    } catch { toast("Браузер не разрешил полноэкранный режим"); }
   };
   // Автоскачивание записи после остановки
   const lastRec = useRef<string | null>(null);
@@ -66,8 +74,9 @@ export function CallRoom({ id }: { id: string }) {
   ];
   const n = tiles.length;
   const cols = n <= 1 ? 1 : n <= 4 ? 2 : 3;
-  // Сцена: закреплённый участник, иначе тот, кто показывает экран (чужой экран приоритетнее своего)
-  const stageId = pinned ?? tiles.find((t) => t.sharing && !t.me)?.id ?? tiles.find((t) => t.sharing)?.id ?? null;
+  // Сцена: закреплённый участник, иначе тот, кто показывает экран. Свой экран на сцену не ставим:
+  // если на нём открыт этот же звонок, получается бесконечное «зеркало» — как в Meet, своя презентация идёт миниатюрой.
+  const stageId = pinned ?? tiles.find((t) => t.sharing && !t.me)?.id ?? null;
   const stage = tiles.find((t) => t.id === stageId) ?? null;
   const thumbs = stage ? tiles.filter((t) => t.id !== stage.id) : [];
 
@@ -109,11 +118,13 @@ export function CallRoom({ id }: { id: string }) {
         {stage ? (
           /* Режим презентации: сцена во всю область + мини-плитки справа (на телефоне — снизу) */
           <div className="flex min-h-0 flex-1 flex-col gap-2 md:flex-row">
-            <div ref={stageRef} className="group relative min-h-0 flex-1">
+            <div ref={stageRef} className={cn("group relative min-h-0 flex-1", fsTarget === "stage" && "bg-black")}>
               <Tile user={stage.user} stream={stage.stream} me={stage.me} muted={stage.muted} camOff={stage.camOff} sharing={stage.sharing} version={stage.version} connected={stage.connected} stats={stage.me ? undefined : room.stats[stage.id]} fit="contain" />
               <div className="absolute right-2 top-2 flex gap-1.5 opacity-80 transition group-hover:opacity-100">
                 {pinned && <button onClick={() => setPinned(null)} className="btn bg-black/55 px-2.5 py-1 text-xs text-white backdrop-blur hover:bg-black/70"><Pin size={13} /> Открепить</button>}
-                <button onClick={() => toggleFullscreen(stageRef.current)} className="btn bg-black/55 px-2.5 py-1 text-xs text-white backdrop-blur hover:bg-black/70" title="Трансляцию на весь экран"><Maximize size={13} /> Во весь экран</button>
+                <button onClick={() => toggleFullscreen(stageRef.current)} className="btn bg-black/55 px-2.5 py-1 text-xs text-white backdrop-blur hover:bg-black/70" title={fsTarget === "stage" ? "Свернуть трансляцию" : "Трансляцию на весь экран"}>
+                  {fsTarget === "stage" ? <><Minimize size={13} /> Свернуть</> : <><Maximize size={13} /> Во весь экран</>}
+                </button>
               </div>
             </div>
             {thumbs.length > 0 && (
@@ -128,7 +139,15 @@ export function CallRoom({ id }: { id: string }) {
           </div>
         ) : (
           /* Обычная сетка; клик по плитке закрепляет её на сцене */
-          <div className="grid min-h-0 flex-1 gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: "1fr" }}>
+          <div className="relative grid min-h-0 flex-1 gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: "1fr" }}>
+            {room.sharing && (
+              <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center">
+                <span className="pointer-events-auto flex items-center gap-2 rounded-full bg-accent px-3 py-1.5 text-xs font-semibold text-accent-ink shadow-card">
+                  <MonitorUp size={14} /> Вы показываете экран — участники его видят
+                  <button onClick={room.stopShare} className="rounded-full bg-black/20 px-2 py-0.5 hover:bg-black/30">Остановить</button>
+                </span>
+              </div>
+            )}
             {tiles.map((t) => (
               <div key={t.id} className="group relative min-h-0" onDoubleClick={() => setPinned(t.id)}>
                 <Tile user={t.user} stream={t.stream} me={t.me} muted={t.muted} camOff={t.camOff} sharing={t.sharing} version={t.version} connected={t.connected} stats={t.me ? undefined : room.stats[t.id]} />
