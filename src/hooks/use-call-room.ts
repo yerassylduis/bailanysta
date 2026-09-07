@@ -21,8 +21,9 @@ import type { CallDto, SignalDto, UserDto } from "@/lib/types";
 export type Peer = { user: UserDto; stream: MediaStream | null; muted: boolean; camOff: boolean; sharing: boolean; version: number; connected: boolean };
 export type ChatMsg = { id: string; from: UserDto; text: string; at: string };
 
-const ICE: RTCConfiguration = {
-  iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302", "stun:stun2.l.google.com:19302"] }],
+/** Запасная конфигурация, если /api/calls/ice недоступен. Основная приходит с сервера (STUN + TURN). */
+const FALLBACK_ICE: RTCConfiguration = {
+  iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }],
 };
 
 export function useCallRoom(callId: string, me: UserDto | null) {
@@ -39,6 +40,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
   const [recordingExt, setRecordingExt] = useState("webm");
 
+  const iceRef = useRef<RTCConfiguration>(FALLBACK_ICE);
   const pcs = useRef(new Map<string, RTCPeerConnection>());
   const pendingIce = useRef(new Map<string, RTCIceCandidateInit[]>());
   const makingOffer = useRef(new Set<string>());
@@ -76,7 +78,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
   const createPc = useCallback((user: UserDto) => {
     const existing = pcs.current.get(user.id);
     if (existing && existing.connectionState !== "closed") return existing;
-    const pc = new RTCPeerConnection(ICE);
+    const pc = new RTCPeerConnection(iceRef.current);
     pcs.current.set(user.id, pc);
     ensurePeer(user);
     // Всегда добавляем аудио и видео трансиверы, чтобы у обеих сторон был симметричный набор
@@ -223,6 +225,8 @@ export function useCallRoom(callId: string, me: UserDto | null) {
       }
       localRef.current = stream; camTrack.current = stream.getVideoTracks()[0] ?? null;
       setLocal(stream);
+      // ICE-серверы (STUN + TURN) — с нашего сервера
+      try { iceRef.current = await api.iceServers(); } catch { iceRef.current = FALLBACK_ICE; }
 
       // Сначала подписка — чтобы не пропустить ответы, потом регистрация
       const es = new EventSource(`/api/calls/${callId}/events`);
@@ -268,7 +272,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
         }
       }
       // отладка в консоли: window.__blCall
-      (window as unknown as { __blCall?: unknown }).__blCall = Object.fromEntries([...pcs.current].map(([id, pc]) => [id, { conn: pc.connectionState, ice: pc.iceConnectionState, sig: pc.signalingState }]));
+      (window as unknown as { __blCall?: unknown }).__blCall = Object.fromEntries([...pcs.current].map(([id, pc]) => [id, { conn: pc.connectionState, ice: pc.iceConnectionState, gather: pc.iceGatheringState, sig: pc.signalingState, hasRemote: !!pc.remoteDescription }]));
     }, 2000);
     return () => clearInterval(t);
   }, [joined, makeOffer]);
