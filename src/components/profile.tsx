@@ -1,16 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarDays, Pencil, LogOut, Check, X, MessageCircle } from "lucide-react";
+import { CalendarDays, Pencil, LogOut, Check, X, MessageCircle, Camera, ImagePlus, Trash2 } from "lucide-react";
+import { useUpload } from "@/hooks/use-upload";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLogout, useMe, useProfile, keys } from "@/hooks/use-data";
 import { api } from "@/lib/api-client";
-import { Avatar, EmptyState, Skeleton } from "./ui";
+import { Avatar, COVER_GRADIENTS, EmptyState, Skeleton, coverStyle } from "./ui";
 import { FollowButton } from "./follow-button";
 import { Feed } from "./feed";
 import { PostEditor } from "./post-editor";
 import { useToast } from "./toast";
-import { plural } from "@/lib/format";
+import { cn, plural } from "@/lib/format";
 import Link from "next/link";
 
 /** Страница профиля: шапка со статистикой, редактирование (своего), редактор, посты автора. */
@@ -24,6 +25,31 @@ export function Profile({ handle }: { handle: string }) {
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
   const [saving, setSaving] = useState(false);
+  const avatarUp = useUpload({ images: 1, videos: 0 }, { maxSide: 512 });
+  const coverUp = useUpload({ images: 1, videos: 0 }, { maxSide: 1600 });
+
+  /** Применяем изменение внешности сразу, не дожидаясь «Сохранить». */
+  const applyLook = async (patch: Parameters<typeof api.updateProfile>[0], ok: string) => {
+    try {
+      await api.updateProfile(patch);
+      await Promise.all([qc.invalidateQueries({ queryKey: keys.profile(handle) }), qc.invalidateQueries({ queryKey: keys.me }), qc.invalidateQueries({ queryKey: ["posts"] }), qc.invalidateQueries({ queryKey: keys.graph })]);
+      toast(ok, "success");
+    } catch (e) { toast(e instanceof Error ? e.message : "Ошибка", "error"); }
+  };
+  const pickAvatar = async (files: FileList) => {
+    avatarUp.reset();
+    const [m] = await avatarUp.add(files);
+    if (m) await applyLook({ avatarMediaId: m.id }, "Аватар обновлён");
+    else toast(avatarUp.items[0]?.error ?? "Не удалось загрузить", "error");
+    avatarUp.reset();
+  };
+  const pickCover = async (files: FileList) => {
+    coverUp.reset();
+    const [m] = await coverUp.add(files);
+    if (m) await applyLook({ coverMediaId: m.id }, "Фон обновлён");
+    else toast("Не удалось загрузить фон", "error");
+    coverUp.reset();
+  };
 
   if (q.isPending) return <ProfileSkeleton />;
   if (q.isError) return <EmptyState title="Такого человека здесь нет" text={`@${handle} ещё не присоединился к Expert Bailanysta.`} action={<Link href="/" className="btn btn-outline">В ленту</Link>} />;
@@ -44,10 +70,37 @@ export function Profile({ handle }: { handle: string }) {
   return (
     <div className="space-y-5">
       <section className="card fade-in relative overflow-hidden">
-        <div className="h-28 w-full" style={{ background: `linear-gradient(120deg, hsl(${[168,34,210,350,90,265,20,140][p.hue % 8]} 55% 45%), var(--accent-soft) 70%, var(--saffron-soft))` }} />
+        <div className="relative h-32 w-full sm:h-40" style={coverStyle(p.cover, p.hue)}>
+          {edit && (
+            <div className="absolute inset-x-3 bottom-3 flex flex-wrap items-center gap-2">
+              <div className="flex gap-1.5 rounded-full bg-black/35 p-1 backdrop-blur">
+                {COVER_GRADIENTS.map((g, i) => (
+                  <button key={i} onClick={() => applyLook({ coverPreset: i }, "Фон обновлён")} title={`Фон ${i + 1}`}
+                    className={cn("h-6 w-6 rounded-full ring-2 ring-white/70 transition hover:scale-110", p.cover === `preset:${i}` && "ring-white scale-110")} style={{ background: g }} />
+                ))}
+              </div>
+              <label className="btn cursor-pointer bg-black/45 px-3 py-1.5 text-xs text-white backdrop-blur hover:bg-black/60">
+                <ImagePlus size={14} /> {coverUp.uploading ? "Загрузка…" : "Своя картинка"}
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.length) pickCover(e.target.files); e.target.value = ""; }} />
+              </label>
+              {p.cover && <button onClick={() => applyLook({ coverPreset: null }, "Фон сброшен")} className="btn bg-black/45 px-3 py-1.5 text-xs text-white backdrop-blur hover:bg-black/60"><Trash2 size={14} /> Сбросить</button>}
+            </div>
+          )}
+        </div>
         <div className="px-5 pb-5 sm:px-6">
           <div className="-mt-10 flex items-end justify-between gap-3">
-            <Avatar user={p} size={84} className="ring-4 ring-elev" />
+            <div className="relative">
+              <Avatar user={p} size={84} className="ring-4 ring-elev" />
+              {edit && (
+                <>
+                  <label className="absolute -bottom-1 -right-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-accent text-accent-ink shadow-card transition hover:brightness-110" title="Сменить аватар">
+                    {avatarUp.uploading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Camera size={15} />}
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.length) pickAvatar(e.target.files); e.target.value = ""; }} />
+                  </label>
+                  {p.avatarUrl && <button onClick={() => applyLook({ avatarMediaId: null }, "Аватар убран")} className="absolute -left-1 -bottom-1 flex h-7 w-7 items-center justify-center rounded-full bg-elev text-rose shadow-card" title="Убрать аватар"><X size={13} /></button>}
+                </>
+              )}
+            </div>
             <div className="flex flex-wrap justify-end gap-2 pb-1">
               {own ? (
                 <>

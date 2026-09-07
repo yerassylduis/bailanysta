@@ -10,6 +10,8 @@ export const DDL: string[] = [
     name TEXT NOT NULL,
     bio TEXT NOT NULL DEFAULT '',
     hue INTEGER NOT NULL DEFAULT 0,
+    avatar_url TEXT,
+    cover TEXT,
     created_at TEXT NOT NULL
   )`,
   `CREATE TABLE IF NOT EXISTS posts (
@@ -41,9 +43,17 @@ export const DDL: string[] = [
     post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
     author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     text TEXT NOT NULL,
+    parent_id TEXT,
     created_at TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS comments_post_idx ON comments(post_id)`,
+  `CREATE TABLE IF NOT EXISTS comment_likes (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    comment_id TEXT NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, comment_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS comment_likes_comment_idx ON comment_likes(comment_id)`,
   `CREATE TABLE IF NOT EXISTS follows (
     follower_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     followee_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -115,6 +125,9 @@ export const DDL: string[] = [
  */
 export const SOFT_MIGRATIONS: string[] = [
   `ALTER TABLE posts ADD COLUMN repost_of_id TEXT`,
+  `ALTER TABLE users ADD COLUMN avatar_url TEXT`,
+  `ALTER TABLE users ADD COLUMN cover TEXT`,
+  `ALTER TABLE comments ADD COLUMN parent_id TEXT`,
   // индексы на добавленные колонки — только после ALTER
   `CREATE INDEX IF NOT EXISTS posts_repost_idx ON posts(repost_of_id)`,
 ];

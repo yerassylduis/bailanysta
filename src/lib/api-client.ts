@@ -38,7 +38,8 @@ export const api = {
   me: () => request<{ user: UserDto | null; unread: number; unreadMessages: number }>("/api/auth/me"),
   login: (handle: string, name?: string) => request<{ user: UserDto; created: boolean }>("/api/auth/login", { method: "POST", body: JSON.stringify({ handle, name }) }),
   logout: () => request<{ ok: true }>("/api/auth/logout", { method: "POST" }),
-  updateProfile: (patch: { name?: string; bio?: string }) => request<{ user: UserDto }>("/api/auth/me", { method: "PATCH", body: JSON.stringify(patch) }),
+  updateProfile: (patch: { name?: string; bio?: string; avatarMediaId?: string | null; coverMediaId?: string | null; coverPreset?: number | null }) =>
+    request<{ user: UserDto }>("/api/auth/me", { method: "PATCH", body: JSON.stringify(patch) }),
 
   posts: (f: { scope?: string; author?: string; q?: string; tag?: string; mood?: string; cursor?: string | null; limit?: number }) =>
     request<Page<PostDto>>(`/api/posts${qs(f)}`),
@@ -76,7 +77,8 @@ export const api = {
   like: (id: string, liked: boolean) => request<{ likeCount: number; likedByViewer: boolean }>(`/api/posts/${id}/like`, { method: "PUT", body: JSON.stringify({ liked }) }),
 
   comments: (id: string) => request<{ items: CommentDto[] }>(`/api/posts/${id}/comments`),
-  addComment: (id: string, text: string) => request<CommentDto>(`/api/posts/${id}/comments`, { method: "POST", body: JSON.stringify({ text }) }),
+  addComment: (id: string, text: string, parentId?: string) => request<CommentDto>(`/api/posts/${id}/comments`, { method: "POST", body: JSON.stringify({ text, parentId }) }),
+  likeComment: (id: string, liked: boolean) => request<{ likeCount: number; likedByViewer: boolean }>(`/api/comments/${id}/like`, { method: "PUT", body: JSON.stringify({ liked }) }),
 
   profile: (handle: string) => request<UserProfileDto>(`/api/users/${handle}`),
   follow: (handle: string, follow: boolean) => request<{ followers: number; viewerFollows: boolean }>(`/api/users/${handle}/follow`, { method: "PUT", body: JSON.stringify({ follow }) }),

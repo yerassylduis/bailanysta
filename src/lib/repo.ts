@@ -12,11 +12,13 @@ import { BOT_HANDLE } from "./bot";
  * Route handlers только валидируют вход и вызывают функции отсюда.
  */
 
-const { users, posts, postTags, likes, comments, follows, notifications, media, postMedia, bookmarks } = schema;
+const { users, posts, postTags, likes, comments, commentLikes, follows, notifications, media, postMedia, bookmarks } = schema;
 
 export const toUserDto = (u: User): UserDto => ({
-  id: u.id, handle: u.handle, name: u.name, bio: u.bio, hue: u.hue, createdAt: u.createdAt,
+  id: u.id, handle: u.handle, name: u.name, bio: u.bio, hue: u.hue, avatarUrl: u.avatarUrl ?? null, cover: u.cover ?? null, createdAt: u.createdAt,
 });
+
+export const COVER_PRESETS = 6;
 
 export const toMediaDto = (m: Media): MediaDto => ({
   id: m.id, kind: m.kind as MediaDto["kind"], mime: m.mime, url: m.url, width: m.width, height: m.height,
@@ -53,15 +55,37 @@ export async function loginOrRegister(handle: string, name?: string) {
   const existing = await findUserByHandle(handle);
   if (existing) return { user: existing, created: false };
   const user: User = {
-    id: newId(), handle, name: name?.trim() || `@${handle}`, bio: "", hue: hueFromHandle(handle), createdAt: nowIso(),
+    id: newId(), handle, name: name?.trim() || `@${handle}`, bio: "", hue: hueFromHandle(handle), avatarUrl: null, cover: null, createdAt: nowIso(),
   };
   await db.insert(users).values(user);
   return { user, created: true };
 }
 
-export async function updateProfile(userId: string, patch: { name?: string; bio?: string }) {
+export async function updateProfile(userId: string, patch: { name?: string; bio?: string; avatarMediaId?: string | null; coverMediaId?: string | null; coverPreset?: number | null }) {
   const db = await getDb();
-  await db.update(users).set(patch).where(eq(users.id, userId));
+  const set: Partial<User> = {};
+  if (patch.name !== undefined) set.name = patch.name;
+  if (patch.bio !== undefined) set.bio = patch.bio;
+  // Аватар: null — убрать, id — взять URL загруженного пользователем изображения.
+  if (patch.avatarMediaId !== undefined) {
+    if (patch.avatarMediaId === null) set.avatarUrl = null;
+    else {
+      const [m] = await ownedMedia(userId, [patch.avatarMediaId]);
+      if (m.kind !== "image") throw new HttpError(400, "Аватар должен быть изображением");
+      set.avatarUrl = m.url;
+    }
+  }
+  if (patch.coverMediaId !== undefined && patch.coverMediaId !== null) {
+    const [m] = await ownedMedia(userId, [patch.coverMediaId]);
+    if (m.kind !== "image") throw new HttpError(400, "Обложка должна быть изображением");
+    set.cover = m.url;
+  } else if (patch.coverPreset !== undefined && patch.coverPreset !== null) {
+    if (patch.coverPreset < 0 || patch.coverPreset >= COVER_PRESETS) throw new HttpError(400, "Нет такого фона");
+    set.cover = `preset:${patch.coverPreset}`;
+  } else if (patch.coverMediaId === null || patch.coverPreset === null) {
+    set.cover = null;
+  }
+  if (Object.keys(set).length) await db.update(users).set(set).where(eq(users.id, userId));
   const [u] = await db.select().from(users).where(eq(users.id, userId));
   return u;
 }
@@ -318,6 +342,7 @@ export async function deletePost(author: User, id: string) {
   if (row.authorId !== author.id) throw new HttpError(403, "Можно удалять только свои посты");
   // Явно чистим зависимые строки: на Turso PRAGMA foreign_keys может быть выключен.
   await db.delete(notifications).where(eq(notifications.postId, id));
+  await db.delete(commentLikes).where(inArray(commentLikes.commentId, db.select({ id: comments.id }).from(comments).where(eq(comments.postId, id))));
   await db.delete(comments).where(eq(comments.postId, id));
   await db.delete(likes).where(eq(likes.postId, id));
   await db.delete(bookmarks).where(eq(bookmarks.postId, id));
@@ -359,25 +384,56 @@ export async function setLike(viewer: User, postId: string, liked: boolean) {
 
 /* ------------------------------ comments -------------------------------- */
 
-export async function listComments(postId: string): Promise<CommentDto[]> {
+export async function listComments(postId: string, viewerId: string | null): Promise<CommentDto[]> {
   const db = await getDb();
   const rows = await db.select({ c: comments, u: users }).from(comments)
     .innerJoin(users, eq(comments.authorId, users.id))
     .where(eq(comments.postId, postId))
     .orderBy(comments.createdAt);
-  return rows.map(({ c, u }) => ({ id: c.id, text: c.text, createdAt: c.createdAt, author: toUserDto(u) }));
+  if (!rows.length) return [];
+  const ids = rows.map((r) => r.c.id);
+  const [lc, mine] = await Promise.all([
+    db.select({ id: commentLikes.commentId, n: count() }).from(commentLikes).where(inArray(commentLikes.commentId, ids)).groupBy(commentLikes.commentId),
+    viewerId ? db.select({ id: commentLikes.commentId }).from(commentLikes).where(and(eq(commentLikes.userId, viewerId), inArray(commentLikes.commentId, ids))) : Promise.resolve([]),
+  ]);
+  const lcm = new Map(lc.map((x) => [x.id, x.n]));
+  const liked = new Set(mine.map((x) => x.id));
+  return rows.map(({ c, u }) => ({
+    id: c.id, text: c.text, createdAt: c.createdAt, author: toUserDto(u), parentId: c.parentId ?? null,
+    likeCount: lcm.get(c.id) ?? 0, likedByViewer: liked.has(c.id),
+  }));
 }
 
-export async function addComment(author: User, postId: string, text: string): Promise<CommentDto> {
+export async function addComment(author: User, postId: string, text: string, parentId: string | null = null): Promise<CommentDto> {
   const db = await getDb();
   const [row] = await db.select().from(posts).where(eq(posts.id, postId)).limit(1);
   if (!row) throw new HttpError(404, "Пост не найден");
+  let parent: typeof comments.$inferSelect | null = null;
+  if (parentId) {
+    [parent] = await db.select().from(comments).where(and(eq(comments.id, parentId), eq(comments.postId, postId))).limit(1);
+    if (!parent) throw new HttpError(404, "Комментарий, на который вы отвечаете, не найден");
+  }
   const id = newId();
   const createdAt = nowIso();
-  await db.insert(comments).values({ id, postId, authorId: author.id, text, createdAt });
-  if (row.authorId !== author.id) await pushNotification({ userId: row.authorId, actorId: author.id, type: "comment", postId });
+  await db.insert(comments).values({ id, postId, authorId: author.id, text, parentId: parent?.id ?? null, createdAt });
+  if (parent && parent.authorId !== author.id) await pushNotification({ userId: parent.authorId, actorId: author.id, type: "reply", postId });
+  if (row.authorId !== author.id && row.authorId !== parent?.authorId) await pushNotification({ userId: row.authorId, actorId: author.id, type: "comment", postId });
   await notifyMentions(author, postId, text, row.authorId);
-  return { id, text, createdAt, author: toUserDto(author) };
+  return { id, text, createdAt, author: toUserDto(author), parentId: parent?.id ?? null, likeCount: 0, likedByViewer: false };
+}
+
+export async function setCommentLike(viewer: User, commentId: string, liked: boolean) {
+  const db = await getDb();
+  const [c] = await db.select().from(comments).where(eq(comments.id, commentId)).limit(1);
+  if (!c) throw new HttpError(404, "Комментарий не найден");
+  if (liked) {
+    const res = await db.insert(commentLikes).values({ userId: viewer.id, commentId, createdAt: nowIso() }).onConflictDoNothing().returning();
+    if (res.length && c.authorId !== viewer.id) await pushNotification({ userId: c.authorId, actorId: viewer.id, type: "comment_like", postId: c.postId });
+  } else {
+    await db.delete(commentLikes).where(and(eq(commentLikes.userId, viewer.id), eq(commentLikes.commentId, commentId)));
+  }
+  const [{ n }] = await db.select({ n: count() }).from(commentLikes).where(eq(commentLikes.commentId, commentId));
+  return { likeCount: n, likedByViewer: liked };
 }
 
 /* ------------------------------- follows -------------------------------- */
@@ -433,12 +489,13 @@ export async function postsSince(sinceIso: string, viewerId: string | null, limi
 /** Посты, у которых после `sinceIso` изменились лайки/комментарии/репосты — клиент перечитает их счётчики. */
 export async function activitySince(sinceIso: string, limit = 30): Promise<string[]> {
   const db = await getDb();
-  const [l, c, r] = await Promise.all([
+  const [l, c, r, cl] = await Promise.all([
     db.select({ id: likes.postId }).from(likes).where(gt(likes.createdAt, sinceIso)).limit(limit),
     db.select({ id: comments.postId }).from(comments).where(gt(comments.createdAt, sinceIso)).limit(limit),
     db.select({ id: posts.repostOfId }).from(posts).where(and(gt(posts.createdAt, sinceIso), sql`${posts.repostOfId} IS NOT NULL`)).limit(limit),
+    db.select({ id: comments.postId }).from(commentLikes).innerJoin(comments, eq(commentLikes.commentId, comments.id)).where(gt(commentLikes.createdAt, sinceIso)).limit(limit),
   ]);
-  return [...new Set([...l, ...c, ...r].map((x) => x.id).filter((x): x is string => !!x))].slice(0, limit);
+  return [...new Set([...l, ...c, ...r, ...cl].map((x) => x.id).filter((x): x is string => !!x))].slice(0, limit);
 }
 
 /** Новые уведомления после момента `sinceIso` (для realtime-потока). */

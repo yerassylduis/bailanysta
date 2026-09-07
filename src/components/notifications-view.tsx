@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import { Heart, MessageCircle, UserPlus, AtSign, CheckCheck, Repeat2, Quote } from "lucide-react";
+import { Heart, MessageCircle, UserPlus, AtSign, CheckCheck, Repeat2, Quote, Reply, ThumbsUp } from "lucide-react";
 import { useMarkRead, useMe, useNotifications } from "@/hooks/use-data";
 import { Avatar, EmptyState, Skeleton } from "./ui";
 import { cn, timeAgo } from "@/lib/format";
@@ -15,6 +15,8 @@ const META: Record<NotificationDto["type"], { icon: React.ReactNode; text: strin
   mention: { icon: <AtSign size={14} className="text-accent" />, text: "упомянул(а) вас" },
   repost: { icon: <Repeat2 size={14} className="text-accent" />, text: "репостнул(а) ваш пост" },
   quote: { icon: <Quote size={14} className="text-saffron" />, text: "процитировал(а) ваш пост" },
+  reply: { icon: <Reply size={14} className="text-accent" />, text: "ответил(а) на ваш комментарий" },
+  comment_like: { icon: <ThumbsUp size={14} className="text-rose" />, text: "оценил(а) ваш комментарий" },
 };
 
 /** Уведомления: обновляются раз в 20 секунд; при открытии страницы отмечаются прочитанными. */

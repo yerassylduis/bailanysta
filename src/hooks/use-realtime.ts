@@ -15,6 +15,7 @@ import { ApiError } from "@/lib/api-client";
 const TEXT: Record<NotificationDto["type"], string> = {
   like: "оценил(а) ваш пост", comment: "ответил(а) на ваш пост", follow: "подписался(ась) на вас",
   mention: "упомянул(а) вас", repost: "репостнул(а) ваш пост", quote: "процитировал(а) ваш пост",
+  reply: "ответил(а) на ваш комментарий", comment_like: "оценил(а) ваш комментарий",
 };
 
 type MeData = Awaited<ReturnType<typeof api.me>>;

@@ -3,7 +3,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
-import type { MessageDto, Page, PostDto, UserProfileDto } from "@/lib/types";
+import type { CommentDto, MessageDto, Page, PostDto, UserProfileDto } from "@/lib/types";
 
 /**
  * Все хуки данных в одном месте. Ключи запросов — тоже здесь, чтобы
@@ -110,7 +110,7 @@ export function useDeletePost() {
 export function useAddComment(postId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (text: string) => api.addComment(postId, text),
+    mutationFn: ({ text, parentId }: { text: string; parentId?: string }) => api.addComment(postId, text, parentId),
     onSuccess: (c) => {
       qc.setQueryData<{ items: typeof c[] }>(keys.comments(postId), (d) => ({ items: [...(d?.items ?? []), c] }));
       patchPostEverywhere(qc, postId, (p) => ({ ...p, commentCount: p.commentCount + 1 }));
@@ -172,6 +172,19 @@ export function useSendMessage(handle: string) {
       qc.setQueryData<Awaited<ReturnType<typeof api.messages>>>(keys.messages(handle), (d) => (d ? { ...d, items: [...d.items, m] } : d));
       qc.invalidateQueries({ queryKey: keys.conversations });
     },
+  });
+}
+
+/** Лайк комментария — оптимистично, в кэше комментариев поста. */
+export function useLikeComment(postId: string) {
+  const qc = useQueryClient();
+  const patch = (id: string, fn: (c: CommentDto) => CommentDto) =>
+    qc.setQueryData<{ items: CommentDto[] }>(keys.comments(postId), (d) => (d ? { items: d.items.map((c) => (c.id === id ? fn(c) : c)) } : d));
+  return useMutation({
+    mutationFn: ({ id, liked }: { id: string; liked: boolean }) => api.likeComment(id, liked),
+    onMutate: ({ id, liked }) => patch(id, (c) => ({ ...c, likedByViewer: liked, likeCount: c.likeCount + (liked ? 1 : -1) })),
+    onSuccess: (res, { id }) => patch(id, (c) => ({ ...c, ...res })),
+    onError: (_e, { id, liked }) => patch(id, (c) => ({ ...c, likedByViewer: !liked, likeCount: c.likeCount + (liked ? -1 : 1) })),
   });
 }
 

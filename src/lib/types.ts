@@ -6,6 +6,9 @@ export type UserDto = {
   name: string;
   bio: string;
   hue: number;
+  avatarUrl: string | null;
+  /** URL обложки или "preset:N" */
+  cover: string | null;
   createdAt: string;
 };
 
@@ -64,11 +67,14 @@ export type CommentDto = {
   text: string;
   createdAt: string;
   author: UserDto;
+  parentId: string | null;
+  likeCount: number;
+  likedByViewer: boolean;
 };
 
 export type NotificationDto = {
   id: string;
-  type: "like" | "comment" | "follow" | "mention" | "repost" | "quote";
+  type: "like" | "comment" | "follow" | "mention" | "repost" | "quote" | "reply" | "comment_like";
   read: boolean;
   createdAt: string;
   actor: UserDto;

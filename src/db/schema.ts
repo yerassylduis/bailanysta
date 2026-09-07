@@ -12,6 +12,10 @@ export const users = sqliteTable("users", {
   bio: text("bio").notNull().default(""),
   /** Индекс палитры аватара (0..7) — генерируется из handle. */
   hue: integer("hue").notNull().default(0),
+  /** Загруженный аватар (URL медиа) — если null, показываются инициалы. */
+  avatarUrl: text("avatar_url"),
+  /** Обложка профиля: URL медиа или "preset:N" — один из встроенных градиентов. */
+  cover: text("cover"),
   createdAt: text("created_at").notNull(),
 });
 
@@ -127,9 +131,21 @@ export const comments = sqliteTable(
     postId: text("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
     authorId: text("author_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     text: text("text").notNull(),
+    /** Ответ на другой комментарий (один уровень вложенности в UI). */
+    parentId: text("parent_id"),
     createdAt: text("created_at").notNull(),
   },
   (t) => [index("comments_post_idx").on(t.postId)],
+);
+
+export const commentLikes = sqliteTable(
+  "comment_likes",
+  {
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    commentId: text("comment_id").notNull().references(() => comments.id, { onDelete: "cascade" }),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.commentId] }), index("comment_likes_comment_idx").on(t.commentId)],
 );
 
 export const follows = sqliteTable(

@@ -8,9 +8,33 @@ import type { UserDto } from "@/lib/types";
 
 const HUES = [168, 34, 210, 350, 90, 265, 20, 140];
 
-export function Avatar({ user, size = 40, className }: { user: Pick<UserDto, "handle" | "name" | "hue">; size?: number; className?: string }) {
+/** Встроенные градиенты обложки профиля (индекс = preset). */
+export const COVER_GRADIENTS = [
+  "linear-gradient(120deg, #0aa39a, #7c6cf3)",
+  "linear-gradient(120deg, #ef9a1d, #e5472f)",
+  "linear-gradient(120deg, #0b1020, #3f5efb 60%, #4be0d6)",
+  "linear-gradient(120deg, #ff9a9e, #fad0c4 60%, #ffd1ff)",
+  "linear-gradient(120deg, #134e5e, #71b280)",
+  "linear-gradient(120deg, #2c3e50, #fd746c)",
+];
+
+/** Стиль обложки: своя картинка, встроенный градиент или градиент по цвету аватара. */
+export function coverStyle(cover: string | null | undefined, hue: number): React.CSSProperties {
+  if (cover?.startsWith("preset:")) return { background: COVER_GRADIENTS[Number(cover.slice(7)) % COVER_GRADIENTS.length] };
+  if (cover) return { backgroundImage: `url(${cover})`, backgroundSize: "cover", backgroundPosition: "center" };
+  return { background: `linear-gradient(120deg, hsl(${HUES[hue % HUES.length]} 55% 45%), var(--accent-soft) 70%, var(--saffron-soft))` };
+}
+
+export function Avatar({ user, size = 40, className }: { user: Pick<UserDto, "handle" | "name" | "hue"> & { avatarUrl?: string | null }; size?: number; className?: string }) {
   const h = HUES[user.hue % HUES.length];
   const initials = user.name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || user.handle[0].toUpperCase();
+  if (user.avatarUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={user.avatarUrl} alt="" width={size} height={size} loading="lazy"
+        className={cn("shrink-0 rounded-full object-cover", className)} style={{ width: size, height: size, background: `hsl(${h} 60% 52%)` }} />
+    );
+  }
   return (
     <div
       className={cn("relative shrink-0 select-none rounded-full text-white font-display font-bold flex items-center justify-center", className)}

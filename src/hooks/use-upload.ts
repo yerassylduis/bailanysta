@@ -12,14 +12,14 @@ export type Attachment = { localId: string; kind: "image" | "video"; preview: st
 
 const MAX_SIDE = 1920;
 
-async function compressImage(file: File): Promise<{ blob: Blob; width: number; height: number }> {
+async function compressImage(file: File, maxSide = MAX_SIDE): Promise<{ blob: Blob; width: number; height: number }> {
   if (file.type === "image/gif") {
     const dims = await imageDims(file);
     return { blob: file, ...dims };
   }
   const bitmap = await createImageBitmap(file).catch(() => null);
   if (!bitmap) { const dims = await imageDims(file); return { blob: file, ...dims }; }
-  const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
   const w = Math.round(bitmap.width * scale), h = Math.round(bitmap.height * scale);
   const canvas = document.createElement("canvas");
   canvas.width = w; canvas.height = h;
@@ -39,13 +39,15 @@ function imageDims(file: File) {
   });
 }
 
-export function useUpload(limits = { images: 4, videos: 1 }) {
+export function useUpload(limits = { images: 4, videos: 1 }, opts: { maxSide?: number } = {}) {
+  const maxSide = opts.maxSide ?? MAX_SIDE;
   const [items, setItems] = useState<Attachment[]>([]);
 
   const patch = (localId: string, p: Partial<Attachment>) => setItems((xs) => xs.map((x) => (x.localId === localId ? { ...x, ...p } : x)));
 
-  const add = useCallback(async (files: FileList | File[]) => {
+  const add = useCallback(async (files: FileList | File[]): Promise<MediaDto[]> => {
     const list = Array.from(files);
+    const done: MediaDto[] = [];
     for (const file of list) {
       const kind = file.type.startsWith("video/") ? "video" : file.type.startsWith("image/") ? "image" : null;
       if (!kind) continue;
@@ -61,14 +63,16 @@ export function useUpload(limits = { images: 4, videos: 1 }) {
       setItems((xs) => [...xs, { localId, kind, preview, progress: 0, media: null, error: null }]);
       try {
         let blob: Blob = file, dims: { width: number; height: number } | undefined;
-        if (kind === "image") { const c = await compressImage(file); blob = c.blob; dims = { width: c.width, height: c.height }; }
+        if (kind === "image") { const c = await compressImage(file, maxSide); blob = c.blob; dims = { width: c.width, height: c.height }; }
         const media = await api.upload(blob instanceof File ? blob : new File([blob], file.name, { type: blob.type }), dims, (p) => patch(localId, { progress: p }));
         patch(localId, { media, progress: 1 });
+        done.push(media);
       } catch (e) {
         patch(localId, { error: e instanceof Error ? e.message : "Ошибка загрузки" });
       }
     }
-  }, [limits.images, limits.videos]);
+    return done;
+  }, [limits.images, limits.videos, maxSide]);
 
   const remove = useCallback((localId: string) => setItems((xs) => xs.filter((x) => x.localId !== localId)), []);
   const reset = useCallback(() => setItems([]), []);

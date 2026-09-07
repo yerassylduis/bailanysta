@@ -113,7 +113,11 @@ export function AttachmentPreviews({ items, onRemove }: { items: Attachment[]; o
             // eslint-disable-next-line @next/next/no-img-element
             <img src={a.preview} alt="" className={cn("h-full w-full object-cover", items.length === 1 && "max-h-80 object-contain")} />
           ) : (
-            <div className="flex h-full min-h-40 w-full items-center justify-center bg-black/80 text-white"><video src={a.preview} className="h-full w-full object-contain" muted playsInline /><Film className="absolute" size={28} /></div>
+            <div className="relative flex h-full min-h-48 w-full items-center justify-center bg-black">
+              {/* видео можно посмотреть до публикации: controls + звук */}
+              <video src={a.preview} className="max-h-80 w-full object-contain" controls playsInline preload="metadata" />
+              <span className="pointer-events-none absolute left-2 top-2 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[11px] text-white"><Film size={12} /> видео</span>
+            </div>
           )}
           {!a.media && !a.error && (
             <div className="absolute inset-x-0 bottom-0 h-1.5 bg-black/30"><div className="h-full bg-accent transition-all" style={{ width: `${Math.max(5, a.progress * 100)}%` }} /></div>

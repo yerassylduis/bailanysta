@@ -72,8 +72,9 @@ Expert Bailanysta — учебный проект по ТЗ nFactorial (гран
 
 **Бонус**
 - [x] Светлая/тёмная тема с сохранением выбора (cookie + localStorage, без мигания)
-- [x] Лайки (оптимистичные) и комментарии
+- [x] Лайки (оптимистичные) и комментарии; **ветки ответов и лайки комментариев**
 - [x] Создание, редактирование, удаление своих постов
+- [x] Профиль: имя, био, **загрузка аватара, обложка** (своя картинка или один из шести градиентов)
 - [x] Подписки; лента «Подписки»
 - [x] Уведомления: лайк, комментарий, репост, цитата, подписка, **упоминание @ника**; бейдж непрочитанных; **realtime через SSE**
 - [x] ИИ (Anthropic Claude) для генерации контента — с сервера, с офлайн-фолбэком
@@ -190,6 +191,7 @@ AppShell ─ левая навигация · ThemeToggle · RightRail (поис
    ├─ SearchView ─ SearchForm · люди · Feed(q)
    └─ NotificationsView
 PostCard ─ Avatar · RichText (#теги/@ники → ссылки) · MediaGrid ─ Lightbox / VideoPlayer · QuotedPost · лайк · комментарии · репост/цитата · закладка · поделиться · меню (PostEditor inline)
+Comments ─ форма (ответ на комментарий, подсказка Cosmos) · ветки: корневой комментарий → ответы · лайк комментария
 ```
 
 Принципы: один компонент — одна ответственность; состояние сервера живёт в TanStack Query, локальное — в `useState`; никаких `useEffect` для синхронизации состояния (тема — через `useSyncExternalStore` на `data-theme`, сброс формы — через `key`).
@@ -216,12 +218,13 @@ PostCard ─ Avatar · RichText (#теги/@ники → ссылки) · MediaG
 |---|---|---|
 | `POST` | `/api/auth/login` | `{handle, name?}` — вход или регистрация; ставит cookie |
 | `POST` | `/api/auth/logout` | выход |
-| `GET` `PATCH` | `/api/auth/me` | текущий пользователь + непрочитанные; правка имени/био |
+| `GET` `PATCH` | `/api/auth/me` | текущий пользователь + непрочитанные; правка имени/био, `avatarMediaId`, `coverMediaId` или `coverPreset` (0–5) |
 | `GET` | `/api/posts?scope=all\|following\|hot\|bookmarks&author=&q=&tag=&mood=&cursor=&limit=` | лента с фильтрами и курсором (`hot` — топ-30 без курсора) |
 | `POST` | `/api/posts` | `{text, mood?, mediaIds?}` — создать (текст или медиа обязательны) |
 | `GET` `PATCH` `DELETE` | `/api/posts/:id` | пост; правка/удаление — только автор (403) |
 | `PUT` | `/api/posts/:id/like` | `{liked: boolean}` — идемпотентно |
-| `GET` `POST` | `/api/posts/:id/comments` | комментарии |
+| `GET` `POST` | `/api/posts/:id/comments` | комментарии (в ответе `parentId`, `likeCount`, `likedByViewer`); `POST {text, parentId?}` — ответ на комментарий |
+| `PUT` | `/api/comments/:id/like` | `{liked: boolean}` |
 | `GET` | `/api/users/:handle` | профиль со статистикой и `viewerFollows` |
 | `PUT` | `/api/users/:handle/follow` | `{follow: boolean}` |
 | `GET` | `/api/users/search?q=` · `/api/users/suggested` | поиск людей · рекомендации |
@@ -310,6 +313,7 @@ DATABASE_URL=file:./data/bailanysta.db SESSION_SECRET=… npm start
 - **Подтверждение удаления — нативный `confirm()`**, не в стиле приложения.
 - **Каскадное удаление** реализовано явно в коде (на Turso `PRAGMA foreign_keys` может быть выключен) — при добавлении новых зависимых таблиц нужно не забыть дописать.
 - **Медиа на Vercel без Blob эфемерны** — на живом демо Blob подключён.
+- **Ответы на комментарии — один уровень вложенности в интерфейсе**: ответ на ответ показывается под корневым комментарием с пометкой «в ответ @ник».
 - **Видео не транскодируется**: MOV с iPhone (HEVC) может не проиграться в Chrome на Windows. Лечится клиентским выбором MP4/H.264 или серверным ffmpeg.
 - **Чат без «печатает…» и статусов доставки**; сообщения нельзя редактировать и удалять.
 - **Бот отвечает по ключевым словам** и не помнит контекст диалога; без ключа Anthropic нетипичные вопросы получают общий ответ со списком тем.

@@ -12,7 +12,15 @@ export const GET = handler(async () => {
   return ok({ user: toUserDto(user), unread, unreadMessages });
 });
 
-const Patch = z.object({ name: z.string().trim().min(1).max(60).optional(), bio: z.string().trim().max(200).optional() });
+const Patch = z.object({
+  name: z.string().trim().min(1).max(60).optional(),
+  bio: z.string().trim().max(200).optional(),
+  /** id загруженного изображения или null, чтобы убрать аватар */
+  avatarMediaId: z.string().nullable().optional(),
+  /** обложка: своя картинка (id медиа) ИЛИ встроенный градиент (0..5); null — сбросить */
+  coverMediaId: z.string().nullable().optional(),
+  coverPreset: z.number().int().min(0).max(5).nullable().optional(),
+});
 
 export const PATCH = handler(async (req) => {
   const user = await requireUser();
