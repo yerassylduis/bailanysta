@@ -8,7 +8,8 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { UserPlus, Search, X, Check } from "lucide-react";
 import { useCallRoom, type Peer, type PeerStats } from "@/hooks/use-call-room";
-import { Activity, Volume2, Maximize, Minimize, Pin } from "lucide-react";
+import { Activity, Volume2, Maximize, Minimize, Pin, Disc } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { Avatar, EmptyState } from "./ui";
 import { useToast } from "./toast";
 import { cn } from "@/lib/format";
@@ -19,6 +20,15 @@ export function CallRoom({ id }: { id: string }) {
   const { data: me, isPending } = useMe();
   const room = useCallRoom(id, me?.user ?? null);
   const toast = useToast();
+  const router = useRouter();
+  // Заранее запрашиваем камеру/микрофон на экране входа — вход по кнопке становится мгновенным
+  const { prepare, onRecording, joined } = room;
+  useEffect(() => { if (me?.user && !joined) prepare().catch(() => {}); }, [me?.user, joined, prepare]);
+  // Кто-то включил запись — всплывашка (звук и голос — в хуке)
+  useEffect(() => { onRecording((by) => toast(`🔴 ${by}: идёт запись звонка`, "error")); }, [onRecording, toast]);
+  const previewRef = useRef<HTMLVideoElement>(null);
+  useEffect(() => { if (previewRef.current && previewRef.current.srcObject !== room.local) { previewRef.current.srcObject = room.local; previewRef.current.play().catch(() => {}); } }, [room.local, room.joined]);
+  const leaveAndGo = async () => { await room.leave(); router.push("/calls"); };
   const [chatOpen, setChatOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [diagOpen, setDiagOpen] = useState(false);
@@ -44,16 +54,6 @@ export function CallRoom({ id }: { id: string }) {
       await el.requestFullscreen({ navigationUI: "hide" } as FullscreenOptions);
     } catch { toast("Браузер не разрешил полноэкранный режим"); }
   };
-  // Автоскачивание записи после остановки
-  const lastRec = useRef<string | null>(null);
-  useEffect(() => {
-    if (room.recordingUrl && room.recordingUrl !== lastRec.current) {
-      lastRec.current = room.recordingUrl;
-      const a = document.createElement("a"); a.href = room.recordingUrl; a.download = `bailanysta-${id}.${room.recordingExt}`; document.body.appendChild(a); a.click(); a.remove();
-      toast("Запись сохранена в загрузки браузера", "success");
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [room.recordingUrl]);
   const [text, setText] = useState("");
   const chatBottom = useRef<HTMLDivElement>(null);
   // Непрочитанные в чате — производное: сколько сообщений пришло с момента, когда чат последний раз был открыт.
@@ -86,10 +86,14 @@ export function CallRoom({ id }: { id: string }) {
       <div className="mx-auto max-w-lg pt-6">
         <Link href="/calls" className="btn btn-ghost -ml-2 mb-3 px-2 text-sm"><ArrowLeft size={16} /> Все созвоны</Link>
         <div className="card p-6 text-center">
-          <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-accent-soft text-accent"><Video size={26} /></span>
+          {room.local && room.local.getVideoTracks().length > 0 ? (
+            <video ref={previewRef} autoPlay playsInline muted className="mx-auto mb-3 aspect-video w-full max-w-sm rounded-xl bg-black object-cover scale-x-[-1]" />
+          ) : (
+            <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-accent-soft text-accent"><Video size={26} /></span>
+          )}
           <h1 className="font-display text-xl font-bold">{room.call?.title ?? "Созвон"}</h1>
           <p className="mt-1 font-mono text-sm text-muted">{id}</p>
-          <p className="mt-3 text-sm text-ink-2">Браузер попросит доступ к камере и микрофону. Если камеры нет — подключимся только со звуком.</p>
+          <p className="mt-3 text-sm text-ink-2">{room.local ? (room.local.getVideoTracks().length ? "Камера и микрофон готовы — нажмите «Присоединиться»." : "Камера недоступна — подключимся только со звуком.") : "Браузер попросит доступ к камере и микрофону. Если камеры нет — подключимся только со звуком."}</p>
           {room.error && <p className="mt-3 rounded-xl bg-rose-soft p-3 text-sm text-rose">{room.error}</p>}
           <div className="mt-5 flex flex-wrap justify-center gap-2">
             <button onClick={room.join} className="btn btn-primary px-6 py-3"><Video size={18} /> Присоединиться</button>
@@ -106,6 +110,7 @@ export function CallRoom({ id }: { id: string }) {
         <span className="flex h-2.5 w-2.5 animate-pulse rounded-full bg-rose" />
         <h1 className="truncate font-display text-base font-bold">{room.call?.title}</h1>
         <span className="hidden font-mono text-xs text-muted sm:inline">{id}</span>
+        {room.anyoneRecording && <span className="flex items-center gap-1.5 rounded-full bg-rose px-2.5 py-1 text-xs font-semibold text-white"><Disc size={12} className="animate-pulse" /> Идёт запись{room.recordingBy ? ` · ${room.recordingBy}` : ""}</span>}
         <span className="ml-auto flex items-center gap-1 text-xs text-muted"><Users size={14} /> {tiles.length}</span>
         <button onClick={() => toggleFullscreen(rootRef.current)} className="btn btn-outline btn-icon h-9 w-9" aria-label={fs ? "Выйти из полноэкранного режима" : "Звонок на весь экран"} title={fs ? "Свернуть" : "На весь экран"}>{fs ? <Minimize size={16} /> : <Maximize size={16} />}</button>
         <div className="relative">
@@ -211,7 +216,7 @@ export function CallRoom({ id }: { id: string }) {
         <button onClick={() => openChat(!chatOpen)} className={cn("btn btn-outline relative btn-icon h-12 w-12", chatOpen && "bg-accent-soft border-accent")} aria-label="Чат"><MessageSquare size={20} />{unread > 0 && !chatOpen && <span className="absolute -right-1 -top-1 rounded-full bg-rose px-1.5 text-[10px] font-bold text-white">{unread}</span>}</button>
         {room.recording && <span className="flex items-center gap-1.5 text-xs font-semibold text-rose"><span className="h-2 w-2 animate-pulse rounded-full bg-rose" /> идёт запись</span>}
         {room.recordingUrl && <a href={room.recordingUrl} download={`bailanysta-${id}.${room.recordingExt}`} className="btn btn-outline gap-1.5 text-xs"><Download size={14} /> Скачать запись</a>}
-        <Link href="/calls" onClick={() => room.leave()} className="btn ml-2 bg-rose px-5 text-white hover:brightness-110"><PhoneOff size={18} /> Выйти</Link>
+        <button onClick={leaveAndGo} className="btn ml-2 bg-rose px-5 text-white hover:brightness-110"><PhoneOff size={18} /> Выйти</button>
       </footer>
     </div>
   );

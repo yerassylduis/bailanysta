@@ -10,7 +10,7 @@ import { getCall, heartbeat, signalsSince } from "@/lib/repo-calls";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const TICK_MS = 400;
+const TICK_MS = 300;
 const LIFETIME_MS = 55_000;
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {

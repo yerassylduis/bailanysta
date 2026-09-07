@@ -18,7 +18,7 @@ import type { CallDto, SignalDto, UserDto } from "@/lib/types";
  * Запись: все плитки на canvas + микс звука через AudioContext → MediaRecorder → файл.
  */
 
-export type Peer = { user: UserDto; stream: MediaStream | null; muted: boolean; camOff: boolean; sharing: boolean; version: number; connected: boolean };
+export type Peer = { user: UserDto; stream: MediaStream | null; muted: boolean; camOff: boolean; sharing: boolean; recording: boolean; version: number; connected: boolean };
 export type ChatMsg = { id: string; from: UserDto; text: string; at: string };
 export type PeerStats = {
   conn: string; ice: string; sig: string;
@@ -62,6 +62,18 @@ export function useCallRoom(callId: string, me: UserDto | null) {
   const recTimer = useRef<number>(0);
   const meRef = useRef(me);
   const stateRef = useRef({ muted, camOff, sharing });
+  const onRecordingRef = useRef<((by: string) => void) | null>(null);
+  /** Кто-то включил запись: короткий сигнал + голосовое «Идёт запись звонка» + событие для UI. */
+  const announceRecording = (by: string) => {
+    try {
+      const a = new Audio("/sounds/notify.wav"); a.volume = 0.8; a.play().catch(() => {});
+      if ("speechSynthesis" in window) {
+        const u = new SpeechSynthesisUtterance("Идёт запись звонка"); u.lang = "ru-RU"; u.rate = 1.05;
+        setTimeout(() => window.speechSynthesis.speak(u), 350);
+      }
+    } catch {}
+    onRecordingRef.current?.(by);
+  };
   const peersRef = useRef(peers);
   useEffect(() => { peersRef.current = peers; }, [peers]);
   useEffect(() => { meRef.current = me; }, [me]);
@@ -71,7 +83,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
     api.signal(callId, type, to, payload).catch((e) => console.warn("[call] signal failed", type, e)), [callId]);
 
   const updatePeer = (id: string, patch: Partial<Peer>) => setPeers((p) => (p[id] ? { ...p, [id]: { ...p[id], ...patch } } : p));
-  const ensurePeer = (user: UserDto) => setPeers((p) => (p[user.id] ? p : { ...p, [user.id]: { user, stream: null, muted: false, camOff: false, sharing: false, version: 0, connected: false } }));
+  const ensurePeer = (user: UserDto) => setPeers((p) => (p[user.id] ? p : { ...p, [user.id]: { user, stream: null, muted: false, camOff: false, sharing: false, recording: false, version: 0, connected: false } }));
 
   /** Инициатор пары — участник с меньшим id (детерминированно для обеих сторон). */
   const iAmInitiator = (otherId: string) => (meRef.current?.id ?? "") < otherId;
@@ -88,7 +100,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
   const createPc = useCallback((user: UserDto) => {
     const existing = pcs.current.get(user.id);
     if (existing && existing.connectionState !== "closed") return existing;
-    const pc = new RTCPeerConnection(iceRef.current);
+    const pc = new RTCPeerConnection({ ...iceRef.current, iceCandidatePoolSize: 4 });
     pcs.current.set(user.id, pc);
     gen.current.set(user.id, (gen.current.get(user.id) ?? 0) + 1);
     ensurePeer(user);
@@ -101,7 +113,10 @@ export function useCallRoom(callId: string, me: UserDto | null) {
     for (const t of local?.getTracks() ?? []) { pc.addTrack(t, local!); kinds.add(t.kind); }
     for (const kind of ["audio", "video"] as const) if (!kinds.has(kind)) pc.addTransceiver(kind, { direction: "recvonly" });
 
-    pc.onicecandidate = (e) => { if (e.candidate) signal("ice", user.id, e.candidate.toJSON()); };
+    // кандидаты копим 120 мс и шлём одной пачкой — вместо десятка запросов один-два
+    let batch: RTCIceCandidateInit[] = []; let timer = 0;
+    const flush = () => { const c = batch; batch = []; timer = 0; if (c.length) signal("ice", user.id, { candidates: c }); };
+    pc.onicecandidate = (e) => { if (e.candidate) { batch.push(e.candidate.toJSON()); if (!timer) timer = window.setTimeout(flush, 120); } else flush(); };
     pc.ontrack = (e) => {
       const stream = e.streams[0] ?? new MediaStream([e.track]);
       console.info("[call] track ←", user.handle, e.track.kind, "streams:", e.streams.length, "tracks in stream:", stream.getTracks().length);
@@ -192,9 +207,10 @@ export function useCallRoom(callId: string, me: UserDto | null) {
         }
         case "ice": {
           const pc = pcs.current.get(from.id);
-          const cand = s.payload as RTCIceCandidateInit;
-          if (pc && pc.remoteDescription) await pc.addIceCandidate(cand).catch((e) => console.warn("[call] ice", e));
-          else pendingIce.current.set(from.id, [...(pendingIce.current.get(from.id) ?? []), cand]);
+          const raw = s.payload as RTCIceCandidateInit | { candidates: RTCIceCandidateInit[] };
+          const list = "candidates" in raw ? raw.candidates : [raw];
+          if (pc && pc.remoteDescription) for (const c of list) await pc.addIceCandidate(c).catch((e) => console.warn("[call] ice", e));
+          else pendingIce.current.set(from.id, [...(pendingIce.current.get(from.id) ?? []), ...list]);
           break;
         }
         case "state": {
@@ -202,6 +218,11 @@ export function useCallRoom(callId: string, me: UserDto | null) {
           ensurePeer(from);
           if (payload.muted !== undefined || payload.camOff !== undefined || payload.sharing !== undefined) {
             updatePeer(from.id, { muted: !!payload.muted, camOff: !!payload.camOff, sharing: !!payload.sharing });
+          }
+          if (payload.recording !== undefined) {
+            const was = peersRef.current[from.id]?.recording ?? false;
+            updatePeer(from.id, { recording: !!payload.recording });
+            if (payload.recording && !was) announceRecording(from.name);
           }
           // «привет» новичка: если соединения с ним ещё НЕТ вообще (join потерялся) — инициатор шлёт offer.
           // Если соединение уже есть (в любом состоянии) — ничего не трогаем: оно договаривается.
@@ -237,27 +258,33 @@ export function useCallRoom(callId: string, me: UserDto | null) {
     return () => { alive = false; };
   }, [callId]);
 
-  /** Вход в комнату: камера/микрофон → подписка на сигналы → регистрация → offer тем, для кого мы инициатор. */
+  /** Заранее (на экране входа) запрашиваем камеру/микрофон и ICE-конфигурацию — вход тогда мгновенный. */
+  const prepare = useCallback(async () => {
+    if (localRef.current) return localRef.current;
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }, audio: { echoCancellation: true, noiseSuppression: true } });
+    } catch {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true }); // без камеры — только звук
+      } catch {
+        stream = new MediaStream(); // совсем без устройств — только смотрим и слушаем
+        setMuted(true);
+      }
+      setCamOff(true);
+    }
+    localRef.current = stream; camTrack.current = stream.getVideoTracks()[0] ?? null;
+    setLocal(stream);
+    api.iceServers().then((c) => { iceRef.current = c; }).catch(() => { iceRef.current = FALLBACK_ICE; });
+    return stream;
+  }, []);
+
+  /** Вход в комнату: устройства (если ещё нет) → подписка на сигналы → регистрация → offer тем, для кого мы инициатор. */
   const join = useCallback(async () => {
     if (!me) return;
     setError(null);
     try {
-      let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }, audio: { echoCancellation: true, noiseSuppression: true } });
-      } catch {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({ audio: true }); // без камеры — только звук
-        } catch {
-          stream = new MediaStream(); // совсем без устройств — только смотрим и слушаем
-          setMuted(true);
-        }
-        setCamOff(true);
-      }
-      localRef.current = stream; camTrack.current = stream.getVideoTracks()[0] ?? null;
-      setLocal(stream);
-      // ICE-серверы (STUN + TURN) — с нашего сервера
-      try { iceRef.current = await api.iceServers(); } catch { iceRef.current = FALLBACK_ICE; }
+      await prepare();
 
       // Сначала подписка — чтобы не пропустить ответы, потом регистрация
       const es = new EventSource(`/api/calls/${callId}/events`);
@@ -269,6 +296,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
         setPeers((p) => { const n = { ...p }; for (const id of Object.keys(n)) if (!parts.some((x) => x.id === id && x.online)) { pcs.current.get(id)?.close(); pcs.current.delete(id); delete n[id]; } return n; });
       });
 
+      // регистрация — параллельно с открытием потока, без лишней предварительной загрузки комнаты
       const joinedCall = await api.joinCall(callId);
       setCall(joinedCall);
       setJoined(true);
@@ -283,7 +311,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось войти в звонок. Разрешите доступ к камере и микрофону.");
     }
-  }, [callId, me, makeOffer, onSignal, signal]);
+  }, [callId, me, makeOffer, onSignal, signal, prepare]);
 
   // Страховка: инициатор перезапускает ICE, если соединение упало или не собралось за 20 с.
   useEffect(() => {
@@ -336,18 +364,81 @@ export function useCallRoom(callId: string, me: UserDto | null) {
     return () => clearInterval(t);
   }, [joined, makeOffer]);
 
+  /** Запись: сетка видео на canvas + микс всех аудиодорожек. */
+  const startRecording = useCallback(() => {
+    if (typeof MediaRecorder === "undefined") { setError("Этот браузер не поддерживает запись (MediaRecorder)"); return; }
+    const canvas = document.createElement("canvas");
+    canvas.width = 1280; canvas.height = 720;
+    const ctx = canvas.getContext("2d")!;
+    const videos = () => Array.from(document.querySelectorAll<HTMLVideoElement>("video[data-call-tile]"));
+    recTimer.current = window.setInterval(() => {
+      const vs = videos().filter((v) => v.videoWidth > 0 && v.readyState >= 2);
+      ctx.fillStyle = "#070b18"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const n = Math.max(vs.length, 1), cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n / cols);
+      const cw = canvas.width / cols, ch = canvas.height / rows;
+      vs.forEach((v, i) => {
+        const x = (i % cols) * cw, y = Math.floor(i / cols) * ch;
+        const ar = v.videoWidth / v.videoHeight, tw = Math.min(cw, ch * ar), th = tw / ar;
+        try { ctx.drawImage(v, x + (cw - tw) / 2, y + (ch - th) / 2, tw, th); } catch {}
+        ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(x + 8, y + ch - 34, Math.min(cw - 16, 240), 26);
+        ctx.fillStyle = "#fff"; ctx.font = "14px system-ui"; ctx.fillText(v.dataset.callTile ?? "", x + 14, y + ch - 15);
+      });
+    }, 1000 / 15);
+    const out = canvas.captureStream(15);
+    const ac = new AudioContext();
+    const dest = ac.createMediaStreamDestination();
+    const addAudio = (s: MediaStream | null) => { if (s && s.getAudioTracks().length) ac.createMediaStreamSource(new MediaStream(s.getAudioTracks())).connect(dest); };
+    addAudio(localRef.current);
+    Object.values(peers).forEach((p) => addAudio(p.stream));
+    dest.stream.getAudioTracks().forEach((t) => out.addTrack(t));
+    const candidates = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"];
+    const mime = candidates.find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
+    const ext = mime.startsWith("video/mp4") ? "mp4" : "webm";
+    const chunks: Blob[] = [];
+    const rec = new MediaRecorder(out, mime ? { mimeType: mime, videoBitsPerSecond: 2_500_000 } : undefined);
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    rec.onstop = () => {
+      clearInterval(recTimer.current); ac.close().catch(() => {});
+      const url = URL.createObjectURL(new Blob(chunks, { type: mime || "video/webm" }));
+      setRecordingUrl(url); setRecordingExt(ext); setRecording(false);
+      // скачиваем сразу из хука — работает и при выходе из звонка, когда экран уже размонтирован
+      const a = document.createElement("a"); a.href = url; a.download = `bailanysta-${callId}.${ext}`; document.body.appendChild(a); a.click(); a.remove();
+      signal("state", null, { recording: false });
+      stopResolve.current?.(); stopResolve.current = null;
+    };
+    rec.start(1000);
+    recorder.current = rec;
+    setRecordingUrl(null); setRecording(true);
+    signal("state", null, { recording: true });
+    announceRecording(meRef.current?.name ?? "Вы");
+  }, [peers, callId, signal]);
+
+  const stopResolve = useRef<(() => void) | null>(null);
+  /** Останавливает запись и ждёт, пока файл будет собран и скачан. */
+  const stopRecording = useCallback(() => new Promise<void>((resolve) => {
+    const rec = recorder.current;
+    if (!rec || rec.state !== "recording") { resolve(); return; }
+    stopResolve.current = resolve;
+    rec.stop();
+    setTimeout(resolve, 4000); // страховка
+  }), []);
+
   const leave = useCallback(async () => {
+    // 1) запись — пока дорожки ещё живы, иначе файл получится пустым/битым
+    await stopRecording();
+    // 2) сигналинг и соединения
     esRef.current?.close(); esRef.current = null;
     for (const pc of pcs.current.values()) pc.close();
     pcs.current.clear(); pendingIce.current.clear();
     setPeers({});
+    // 3) устройства
     localRef.current?.getTracks().forEach((t) => t.stop());
     screenStream.current?.getTracks().forEach((t) => t.stop());
     camTrack.current?.stop();
-    setLocal(null); setJoined(false);
-    if (recorder.current?.state === "recording") recorder.current.stop();
+    localRef.current = null; camTrack.current = null; screenStream.current = null;
+    setLocal(null); setJoined(false); setSharing(false);
     try { await api.leaveCall(callId); } catch {}
-  }, [callId]);
+  }, [callId, stopRecording]);
 
   useEffect(() => () => { esRef.current?.close(); for (const pc of pcs.current.values()) pc.close(); localRef.current?.getTracks().forEach((t) => t.stop()); screenStream.current?.getTracks().forEach((t) => t.stop()); camTrack.current?.stop(); }, []);
 
@@ -400,51 +491,9 @@ export function useCallRoom(callId: string, me: UserDto | null) {
     setChat((c) => [...c, { id: res.id, from: me, text: text.trim(), at: res.createdAt }]);
   }, [callId, me]);
 
-  /** Запись: сетка видео на canvas + микс всех аудиодорожек. */
-  const startRecording = useCallback(() => {
-    if (typeof MediaRecorder === "undefined") { setError("Этот браузер не поддерживает запись (MediaRecorder)"); return; }
-    const canvas = document.createElement("canvas");
-    canvas.width = 1280; canvas.height = 720;
-    const ctx = canvas.getContext("2d")!;
-    const videos = () => Array.from(document.querySelectorAll<HTMLVideoElement>("video[data-call-tile]"));
-    recTimer.current = window.setInterval(() => {
-      const vs = videos().filter((v) => v.videoWidth > 0 && v.readyState >= 2);
-      ctx.fillStyle = "#070b18"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-      const n = Math.max(vs.length, 1), cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n / cols);
-      const cw = canvas.width / cols, ch = canvas.height / rows;
-      vs.forEach((v, i) => {
-        const x = (i % cols) * cw, y = Math.floor(i / cols) * ch;
-        const ar = v.videoWidth / v.videoHeight, tw = Math.min(cw, ch * ar), th = tw / ar;
-        try { ctx.drawImage(v, x + (cw - tw) / 2, y + (ch - th) / 2, tw, th); } catch {}
-        ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(x + 8, y + ch - 34, Math.min(cw - 16, 240), 26);
-        ctx.fillStyle = "#fff"; ctx.font = "14px system-ui"; ctx.fillText(v.dataset.callTile ?? "", x + 14, y + ch - 15);
-      });
-    }, 1000 / 15);
-    const out = canvas.captureStream(15);
-    const ac = new AudioContext();
-    const dest = ac.createMediaStreamDestination();
-    const addAudio = (s: MediaStream | null) => { if (s && s.getAudioTracks().length) ac.createMediaStreamSource(new MediaStream(s.getAudioTracks())).connect(dest); };
-    addAudio(localRef.current);
-    Object.values(peers).forEach((p) => addAudio(p.stream));
-    dest.stream.getAudioTracks().forEach((t) => out.addTrack(t));
-    const candidates = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"];
-    const mime = candidates.find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
-    const ext = mime.startsWith("video/mp4") ? "mp4" : "webm";
-    const chunks: Blob[] = [];
-    const rec = new MediaRecorder(out, mime ? { mimeType: mime, videoBitsPerSecond: 2_500_000 } : undefined);
-    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-    rec.onstop = () => {
-      clearInterval(recTimer.current); ac.close();
-      setRecordingUrl(URL.createObjectURL(new Blob(chunks, { type: mime || "video/webm" })));
-      setRecordingExt(ext);
-      setRecording(false);
-    };
-    rec.start(1000);
-    recorder.current = rec;
-    setRecordingUrl(null); setRecording(true);
-  }, [peers]);
 
-  const stopRecording = useCallback(() => { recorder.current?.stop(); }, []);
-
-  return { call, joined, error, local, peers, chat, stats, muted, camOff, sharing, recording, recordingUrl, recordingExt, join, leave, toggleMute, toggleCam, startShare, stopShare, sendChat, startRecording, stopRecording };
+  const onRecording = useCallback((cb: (by: string) => void) => { onRecordingRef.current = cb; }, []);
+  const anyoneRecording = recording || Object.values(peers).some((p) => p.recording);
+  const recordingBy = recording ? (me?.name ?? "Вы") : Object.values(peers).find((p) => p.recording)?.user.name ?? null;
+  return { call, joined, error, local, peers, chat, stats, muted, camOff, sharing, recording, recordingUrl, recordingExt, anyoneRecording, recordingBy, onRecording, prepare, join, leave, toggleMute, toggleCam, startShare, stopShare, sendChat, startRecording, stopRecording };
 }
