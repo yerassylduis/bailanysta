@@ -64,6 +64,7 @@ export function HomeFeed() {
 
       <Feed
         filter={{ scope, mood }}
+        live={scope === "all" && !mood}
         emptyTitle={scope === "following" ? "В подписках пока тихо" : scope === "hot" ? "За неделю ещё ничего не разгорелось" : "Постов с таким настроением ещё нет"}
         emptyText={scope === "following" ? "Подпишитесь на кого-нибудь в созвездии — и лента оживёт." : "Станьте первым, кто задаст этот тон."}
         emptyAction={scope === "following" ? <Link href="/explore" className="btn btn-primary"><Sparkles size={16} /> Открыть созвездие</Link> : undefined}

@@ -1,5 +1,5 @@
 import { currentUser } from "@/lib/auth";
-import { notificationsSince, unreadCount } from "@/lib/repo";
+import { activitySince, notificationsSince, postsSince, unreadCount } from "@/lib/repo";
 import { incomingMessagesSince, unreadMessagesCount } from "@/lib/repo-messages";
 
 /**
@@ -8,6 +8,8 @@ import { incomingMessagesSince, unreadMessagesCount } from "@/lib/repo-messages"
  *   event: notifications  { items, unread, unreadMessages }
  *   event: messages       { items, unreadMessages }
  *   event: counts         { unread, unreadMessages }   (при изменении счётчиков)
+ *   event: posts          { items }                     новые посты для живой ленты
+ *   event: activity       { postIds }                   посты с новыми лайками/комментариями/репостами
  * Поток живёт ~55 с (лимит serverless-функции), затем закрывается; EventSource
  * переподключается сам и передаёт Last-Event-ID — ничего не теряется.
  */
@@ -40,16 +42,21 @@ export async function GET(req: Request) {
 
       while (!closed && Date.now() - startedAt < LIFETIME_MS) {
         try {
-          const [notes, msgs, unread, unreadMessages] = await Promise.all([
+          const [notes, msgs, unread, unreadMessages, fresh, active] = await Promise.all([
             notificationsSince(user.id, since), incomingMessagesSince(user.id, since), unreadCount(user.id), unreadMessagesCount(user.id),
+            postsSince(since, user.id), activitySince(since),
           ]);
-          const newest = [...notes.map((n) => n.createdAt), ...msgs.map((m) => m.createdAt)].sort().pop();
-          if (newest) since = newest;
+          // Курсор — момент последней проверки: лайки/комментарии не имеют «своего» времени в событии.
+          const checkedAt = new Date(Date.now() - 50).toISOString();
+          const newest = [...notes.map((n) => n.createdAt), ...msgs.map((m) => m.createdAt), ...fresh.map((p) => p.createdAt)].sort().pop();
+          since = newest && newest > checkedAt ? newest : checkedAt;
+          if (fresh.length) send("posts", { items: fresh }, since);
+          if (active.length) send("activity", { postIds: active }, since);
           if (notes.length) send("notifications", { items: notes, unread, unreadMessages }, since);
           if (msgs.length) send("messages", { items: msgs, unreadMessages }, since);
           if (!notes.length && !msgs.length && (unread !== lastUnread || unreadMessages !== lastUnreadMsgs)) send("counts", { unread, unreadMessages });
           lastUnread = unread; lastUnreadMsgs = unreadMessages;
-          if (!notes.length && !msgs.length) controller.enqueue(enc.encode(`: ping\n\n`));
+          if (!notes.length && !msgs.length && !fresh.length && !active.length) controller.enqueue(enc.encode(`: ping\n\n`));
         } catch (e) {
           console.error("[events]", e instanceof Error ? e.message : e);
         }

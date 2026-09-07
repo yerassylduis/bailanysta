@@ -423,6 +423,24 @@ export async function listNotifications(userId: string, limit = 30): Promise<{ i
   };
 }
 
+/** Новые посты (всей сети) после `sinceIso` — для живой ленты. */
+export async function postsSince(sinceIso: string, viewerId: string | null, limit = 20): Promise<PostDto[]> {
+  const db = await getDb();
+  const rows = await db.select().from(posts).where(gt(posts.createdAt, sinceIso)).orderBy(desc(posts.createdAt), desc(posts.id)).limit(limit);
+  return hydratePosts(rows, viewerId);
+}
+
+/** Посты, у которых после `sinceIso` изменились лайки/комментарии/репосты — клиент перечитает их счётчики. */
+export async function activitySince(sinceIso: string, limit = 30): Promise<string[]> {
+  const db = await getDb();
+  const [l, c, r] = await Promise.all([
+    db.select({ id: likes.postId }).from(likes).where(gt(likes.createdAt, sinceIso)).limit(limit),
+    db.select({ id: comments.postId }).from(comments).where(gt(comments.createdAt, sinceIso)).limit(limit),
+    db.select({ id: posts.repostOfId }).from(posts).where(and(gt(posts.createdAt, sinceIso), sql`${posts.repostOfId} IS NOT NULL`)).limit(limit),
+  ]);
+  return [...new Set([...l, ...c, ...r].map((x) => x.id).filter((x): x is string => !!x))].slice(0, limit);
+}
+
 /** Новые уведомления после момента `sinceIso` (для realtime-потока). */
 export async function notificationsSince(userId: string, sinceIso: string, limit = 10): Promise<NotificationDto[]> {
   const db = await getDb();

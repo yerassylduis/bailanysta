@@ -57,8 +57,10 @@ export function useComments(id: string, enabled = true) {
   return useQuery({ queryKey: keys.comments(id), queryFn: () => api.comments(id), enabled });
 }
 
+export const PENDING_KEY = ["feed-pending"] as const;
+
 /** Меняет пост во всех кэшах — в лентах (infinite) и в карточке поста. */
-function patchPostEverywhere(qc: ReturnType<typeof useQueryClient>, id: string, fn: (p: PostDto) => PostDto) {
+export function patchPostEverywhere(qc: ReturnType<typeof useQueryClient>, id: string, fn: (p: PostDto) => PostDto) {
   qc.setQueriesData<InfiniteData<Page<PostDto>>>({ queryKey: ["posts"] }, (data) =>
     data ? { ...data, pages: data.pages.map((pg) => ({ ...pg, items: pg.items.map((p) => (p.id === id ? fn(p) : p)) })) } : data);
   qc.setQueryData<PostDto>(keys.post(id), (p) => (p ? fn(p) : p));
@@ -209,3 +211,34 @@ export const useTrending = () => useQuery({ queryKey: keys.trending, queryFn: ap
 export const useSuggested = () => useQuery({ queryKey: keys.suggested, queryFn: api.suggested, staleTime: 60_000 });
 export const useGraph = () => useQuery({ queryKey: keys.graph, queryFn: api.graph, staleTime: 60_000 });
 export const useMuse = () => useMutation({ mutationFn: api.muse });
+
+/** Убирает пост из всех лент (например, если он удалён). */
+export function removePostEverywhere(qc: ReturnType<typeof useQueryClient>, id: string) {
+  qc.setQueriesData<InfiniteData<Page<PostDto>>>({ queryKey: ["posts"] }, (data) =>
+    data ? { ...data, pages: data.pages.map((pg) => ({ ...pg, items: pg.items.filter((p) => p.id !== id) })) } : data);
+}
+
+/** Добавляет новые посты в начало «общей» ленты (scope=all без фильтров). */
+export function prependToAllFeed(qc: ReturnType<typeof useQueryClient>, items: PostDto[]) {
+  qc.setQueriesData<InfiniteData<Page<PostDto>>>({ queryKey: ["posts"], predicate: (q) => isPlainAllFeed(q.queryKey) }, (data) => {
+    if (!data) return data;
+    const known = new Set(data.pages.flatMap((pg) => pg.items.map((p) => p.id)));
+    const fresh = items.filter((p) => !known.has(p.id));
+    if (!fresh.length) return data;
+    const [first, ...rest] = data.pages;
+    return { ...data, pages: [{ ...first, items: [...fresh, ...first.items] }, ...rest] };
+  });
+}
+
+/** Ключ вида ["posts", { scope: "all" }] или ["posts", {}] — общая лента без фильтров. */
+export function isPlainAllFeed(key: readonly unknown[]) {
+  if (key[0] !== "posts") return false;
+  const f = (key[1] ?? {}) as Record<string, unknown>;
+  const ks = Object.keys(f).filter((k) => f[k]);
+  return ks.length === 0 || (ks.length === 1 && f.scope === "all");
+}
+
+/** Посты, пришедшие по SSE, пока пользователь читал ленту ниже верха. */
+export function usePendingPosts() {
+  return useQuery<PostDto[]>({ queryKey: PENDING_KEY, queryFn: async () => [], initialData: [], staleTime: Infinity, gcTime: Infinity });
+}

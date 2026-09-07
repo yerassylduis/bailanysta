@@ -4,8 +4,9 @@ import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { api } from "@/lib/api-client";
-import type { NotificationDto, UserDto } from "@/lib/types";
-import { keys } from "./use-data";
+import type { NotificationDto, PostDto, UserDto } from "@/lib/types";
+import { PENDING_KEY, isPlainAllFeed, keys, patchPostEverywhere, prependToAllFeed, removePostEverywhere } from "./use-data";
+import { ApiError } from "@/lib/api-client";
 
 /**
  * Подписка на /api/events (SSE). Обновляет счётчики в шапке, инвалидирует списки,
@@ -47,9 +48,6 @@ export function useRealtime(enabled: boolean, toast: (text: string, kind?: "info
       const d = JSON.parse((e as MessageEvent).data) as { items: NotificationDto[]; unread: number; unreadMessages: number };
       setCounts(d.unread, d.unreadMessages);
       qc.invalidateQueries({ queryKey: keys.notifications });
-      // лайк/комментарий/репост меняют счётчики на постах — обновим ленты и открытый пост
-      qc.invalidateQueries({ queryKey: ["posts"] });
-      for (const n of d.items) { if (n.post) qc.invalidateQueries({ queryKey: keys.post(n.post.id) }); }
       if (d.items.some((n) => n.type === "follow")) qc.invalidateQueries({ queryKey: ["profile"] });
       if (!pathRef.current.startsWith("/notifications")) {
         for (const n of d.items.slice(-3)) toast(`${n.actor.name} ${TEXT[n.type] ?? "— новое событие"}`, "success");
@@ -64,6 +62,35 @@ export function useRealtime(enabled: boolean, toast: (text: string, kind?: "info
         qc.invalidateQueries({ queryKey: keys.messages(m.from.handle) });
         if (!pathRef.current.startsWith(`/messages/${m.from.handle}`)) toast(`💬 ${m.from.name}: ${m.text.slice(0, 60)}`);
       }
+    });
+
+    // Новые посты: свои пропускаем (уже в кэше через мутацию); чужие — в общую ленту сразу,
+    // если пользователь у верха страницы, иначе в «ожидающие» (кнопка «N новых постов»).
+    es.addEventListener("posts", (e) => {
+      const d = JSON.parse((e as MessageEvent).data) as { items: PostDto[] };
+      const me = qc.getQueryData<MeData>(keys.me)?.user;
+      const items = d.items.filter((p) => p.author.id !== me?.id);
+      if (!items.length) return;
+      const onHome = pathRef.current === "/" && !location.search.includes("scope=") && !location.search.includes("mood=");
+      if (onHome && window.scrollY < 300) prependToAllFeed(qc, items);
+      else qc.setQueryData<PostDto[]>(PENDING_KEY, (prev = []) => [...items.filter((p) => !prev.some((x) => x.id === p.id)), ...prev]);
+      // остальные ленты (подписки, горячее, теги, профили) — перечитать при следующем показе или сразу, если на экране
+      qc.invalidateQueries({ queryKey: ["posts"], predicate: (q) => !isPlainAllFeed(q.queryKey) });
+      qc.invalidateQueries({ queryKey: keys.trending });
+    });
+
+    // Активность: перечитываем затронутые посты и патчим их во всех кэшах; удалённые — убираем.
+    es.addEventListener("activity", async (e) => {
+      const d = JSON.parse((e as MessageEvent).data) as { postIds: string[] };
+      await Promise.all(d.postIds.slice(0, 20).map(async (id) => {
+        try {
+          const fresh = await api.post(id);
+          patchPostEverywhere(qc, id, () => fresh);
+          if (pathRef.current === `/post/${id}`) qc.invalidateQueries({ queryKey: keys.comments(id) });
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 404) removePostEverywhere(qc, id);
+        }
+      }));
     });
 
     // EventSource переподключается сам; логируем только для отладки

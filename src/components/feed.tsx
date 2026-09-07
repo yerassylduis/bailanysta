@@ -1,14 +1,26 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useFeed, type FeedFilter } from "@/hooks/use-data";
+import { useQueryClient } from "@tanstack/react-query";
+import { ArrowUp } from "lucide-react";
+import { PENDING_KEY, prependToAllFeed, useFeed, usePendingPosts, type FeedFilter } from "@/hooks/use-data";
+import { plural } from "@/lib/format";
 import { PostCard } from "./post-card";
 import { EmptyState, FeedSkeleton, PostSkeleton } from "./ui";
 
 /** Бесконечная лента: курсорная пагинация + IntersectionObserver + скелетоны. */
-export function Feed({ filter, emptyTitle = "Пока пусто", emptyText, emptyAction }: { filter: FeedFilter; emptyTitle?: string; emptyText?: string; emptyAction?: React.ReactNode }) {
+export function Feed({ filter, live, emptyTitle = "Пока пусто", emptyText, emptyAction }: { filter: FeedFilter; live?: boolean; emptyTitle?: string; emptyText?: string; emptyAction?: React.ReactNode }) {
   const q = useFeed(filter);
+  const qc = useQueryClient();
+  const { data: pending } = usePendingPosts();
   const sentinel = useRef<HTMLDivElement>(null);
+
+  /** Показать посты, накопившиеся по SSE, пока читали ниже верха. */
+  const showPending = () => {
+    prependToAllFeed(qc, pending);
+    qc.setQueryData(PENDING_KEY, []);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   useEffect(() => {
     const el = sentinel.current;
@@ -28,6 +40,11 @@ export function Feed({ filter, emptyTitle = "Пока пусто", emptyText, em
 
   return (
     <div className="space-y-4">
+      {live && pending.length > 0 && (
+        <div className="sticky top-2 z-30 flex justify-center">
+          <button onClick={showPending} className="btn btn-primary fade-in shadow-card"><ArrowUp size={16} /> {pending.length} {plural(pending.length, "новый пост", "новых поста", "новых постов")}</button>
+        </div>
+      )}
       {items.map((p) => <PostCard key={p.id} post={p} />)}
       <div ref={sentinel} />
       {q.isFetchingNextPage && <PostSkeleton />}
