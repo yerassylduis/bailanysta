@@ -83,7 +83,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
 
   const updatePeer = (id: string, patch: Partial<Peer>) => setPeers((p) => (p[id] ? { ...p, [id]: { ...p[id], ...patch } } : p));
   /** Применить только присланные поля состояния (muted/camOff/sharing/recording), не трогая остальные. */
-  const applyState = (id: string, st: Partial<Peer> | undefined) => {
+  const applyState = useCallback((id: string, st: Partial<Peer> | undefined) => {
     if (!st) return;
     const patch: Partial<Peer> = {};
     if (st.muted !== undefined) patch.muted = !!st.muted;
@@ -91,7 +91,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
     if (st.sharing !== undefined) patch.sharing = !!st.sharing;
     if (st.recording !== undefined) patch.recording = !!st.recording;
     if (Object.keys(patch).length) updatePeer(id, patch);
-  };
+  }, []);
   const ensurePeer = (user: UserDto) => setPeers((p) => (p[user.id] ? p : { ...p, [user.id]: { user, stream: null, muted: false, camOff: false, sharing: false, recording: false, version: 0, connected: false } }));
 
   /** Инициатор пары — участник с меньшим id (детерминированно для обеих сторон). */
@@ -256,7 +256,7 @@ export function useCallRoom(callId: string, me: UserDto | null) {
         }
       }
     } catch (e) { console.warn("[call] signal", s.type, e); }
-  }, [createPc, removePeer, signal, makeOffer]);
+  }, [createPc, removePeer, signal, makeOffer, applyState]);
 
   // Данные комнаты для экрана входа (название, участники) — до подключения к медиа.
   useEffect(() => {
