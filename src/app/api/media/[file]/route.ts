@@ -6,6 +6,10 @@ import type { RouteCtx } from "@/lib/http";
 const MIME: Record<string, string> = {
   jpg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", avif: "image/avif",
   mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime",
+  pdf: "application/pdf", doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xls: "application/vnd.ms-excel", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation", txt: "text/plain; charset=utf-8", csv: "text/csv; charset=utf-8",
+  zip: "application/zip", json: "application/json", md: "text/markdown; charset=utf-8",
   weba: "audio/webm", ogg: "audio/ogg", m4a: "audio/mp4", mp3: "audio/mpeg", wav: "audio/wav", aac: "audio/aac",
 };
 

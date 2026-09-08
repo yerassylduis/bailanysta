@@ -93,6 +93,8 @@ function Sky({ graph, meId, meAdmin }: { graph: GraphDto; meId: string | null; m
   const loopRef = useRef<() => void>(() => {});
   const frameRef = useRef(0);
   const dragRef = useRef<{ id: string; startX: number; startY: number; moved: boolean; pointerId: number } | null>(null);
+  /** После перетаскивания браузер шлёт click по svg — его не считаем «кликом по пустому космосу». */
+  const justDragged = useRef(false);
   const [snap, setSnap] = useState<Node[]>(() => seedNodes(graph, clusters));
   const [dragging, setDragging] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
@@ -217,6 +219,7 @@ function Sky({ graph, meId, meAdmin }: { graph: GraphDto; meId: string | null; m
     const d = dragRef.current;
     if (!d || d.pointerId !== e.pointerId) return;
     dragRef.current = null; setDragging(null);
+    justDragged.current = d.moved;
     if (!d.moved) {
       const n = nodesRef.current.find((x) => x.id === d.id);
       if (!n) return;
@@ -248,7 +251,7 @@ function Sky({ graph, meId, meAdmin }: { graph: GraphDto; meId: string | null; m
   return (
     <div className="relative overflow-hidden rounded-2xl border border-line" style={{ background: "radial-gradient(ellipse at 50% 40%, var(--elev), var(--bg) 75%)" }}>
       <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="block aspect-[16/10] w-full select-none" style={{ touchAction: "none" }} role="img" aria-label={t("explore.mapAria")}
-        onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onClick={() => { if (zoomed && !dragRef.current) unfocus(); }}>
+        onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onClick={() => { if (justDragged.current) { justDragged.current = false; return; } if (zoomed && !dragRef.current) unfocus(); }}>
         <defs>
           {/* свечение без SVG-фильтров: радиальные градиенты дёшевы при любом масштабе */}
           {HUES.map((h) => (
@@ -305,7 +308,9 @@ function Sky({ graph, meId, meAdmin }: { graph: GraphDto; meId: string | null; m
           const half = labelHalf(c.label);
           return (
             <g key={c.id} opacity={dim ? 0.25 : 1} style={{ transition: "opacity .3s" }}>
-              <ellipse cx={g.cx} cy={g.cy} rx={g.rad * 1.6} ry={g.rad * 1.25} fill={`url(#neb-${c.id})`} style={{ pointerEvents: "none" }} />
+              {/* туманность — и зона клика по скоплению в обзоре (зум в галактику) */}
+              <ellipse cx={g.cx} cy={g.cy} rx={g.rad * 1.6} ry={g.rad * 1.25} fill={`url(#neb-${c.id})`}
+                style={{ pointerEvents: zoomed ? "none" : "auto", cursor: "zoom-in" }} onClick={(e) => { if (!zoomed) { e.stopPropagation(); focusCluster(c.id); } }} />
               {!isFocus && (
                 <g style={{ cursor: "zoom-in" }} onClick={(e) => { e.stopPropagation(); focusCluster(c.id); }}>
                   <rect x={lx - half - 30} y={ly - 22} width={half * 2 + 60} height={44} rx={22} fill="var(--elev)" fillOpacity={0.92} stroke={`hsl(${c.hue} 60% 55%)`} strokeWidth={1.5} />

@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Send, ImagePlus, X, MessageCircleMore, Users, Plus, UserPlus, LogOut, Bot, Video, Phone } from "lucide-react";
+import { ArrowLeft, Send, X, MessageCircleMore, Users, Plus, UserPlus, LogOut, Bot, Video, Phone } from "lucide-react";
 import { EmojiPicker, insertAtCursor } from "./emoji-picker";
 import { AudioMessage, VoiceRecorder } from "./voice";
+import { FileCard, GifPicker, fmtBytes } from "./chat-attachments";
+import { Paperclip, FileText } from "lucide-react";
 import { useConversations, useCreateGroup, useGroupMessages, useMe, useMessages, useSendGroupMessage, useSendMessage } from "@/hooks/use-data";
 import { useUpload } from "@/hooks/use-upload";
 import { api } from "@/lib/api-client";
@@ -105,11 +107,14 @@ function GroupAvatar({ members, size = 44 }: { members: UserDto[]; size?: number
 /* --------------------------- общий композер ------------------------------ */
 
 function Composer({ onSend, pending, isBot, onQuick }: { onSend: (body: { text?: string; mediaId?: string }) => Promise<unknown>; pending: boolean; isBot?: boolean; onQuick?: (q: string) => void }) {
-  const upload = useUpload({ images: 1, videos: 1 });
+  const upload = useUpload({ images: 1, videos: 1, files: 1 });
   const toast = useToast();
   const { t } = useT();
   const [text, setText] = useState("");
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const sendGif = async (m: { id: string }) => {
+    try { await onSend({ mediaId: m.id }); } catch (e) { toast(e instanceof Error ? e.message : t("messages.sendFailed"), "error"); }
+  };
   const sendVoice = async (blob: Blob, durationMs: number) => {
     try {
       const m = await api.upload(blob, undefined, undefined, { durationMs });
@@ -133,11 +138,12 @@ function Composer({ onSend, pending, isBot, onQuick }: { onSend: (body: { text?:
       {upload.items.length > 0 && (
         <div className="mb-2 flex gap-2">
           {upload.items.map((a) => (
-            <div key={a.localId} className="relative h-20 w-20 overflow-hidden rounded-lg border border-line bg-bg-2">
+            <div key={a.localId} className={cn("relative h-20 overflow-hidden rounded-lg border border-line bg-bg-2", a.kind === "file" ? "flex w-56 items-center gap-2 px-2" : "w-20")}>
               {a.kind === "image" ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={a.preview} alt="" className="h-full w-full object-cover" />
-              ) : <video src={a.preview} className="h-full w-full object-cover" muted />}
+              ) : a.kind === "video" ? <video src={a.preview} className="h-full w-full object-cover" muted />
+              : <><span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent"><FileText size={20} /></span><span className="min-w-0 text-xs leading-tight"><span className="block truncate font-semibold">{a.media?.name ?? a.name ?? t("emoji.file")}</span>{a.media && <span className="text-muted">{fmtBytes(a.media.size)}</span>}</span></>}
               {!a.media && !a.error && <div className="absolute inset-x-0 bottom-0 h-1 bg-black/30"><div className="h-full bg-accent" style={{ width: `${a.progress * 100}%` }} /></div>}
               {a.error && <div className="absolute inset-0 bg-rose/80 p-1 text-[10px] text-white">{a.error}</div>}
               <button onClick={() => upload.remove(a.localId)} className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white"><X size={12} /></button>
@@ -146,10 +152,11 @@ function Composer({ onSend, pending, isBot, onQuick }: { onSend: (body: { text?:
         </div>
       )}
       <div className="flex items-end gap-1.5">
-        <label className="btn btn-ghost btn-icon shrink-0 cursor-pointer text-accent" title={t("messages.attach")}>
-          <ImagePlus size={20} />
-          <input type="file" accept="image/*,video/*" className="hidden" onChange={(e) => { if (e.target.files?.length) upload.add(e.target.files); e.target.value = ""; }} />
+        <label className="btn btn-ghost btn-icon shrink-0 cursor-pointer text-accent" title={t("emoji.attach")}>
+          <Paperclip size={20} />
+          <input type="file" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.md,.json" className="hidden" onChange={(e) => { if (e.target.files?.length) upload.add(e.target.files); e.target.value = ""; }} />
         </label>
+        <GifPicker onPick={sendGif} disabled={pending} />
         <EmojiPicker onPick={(e) => setText((v) => insertAtCursor(taRef.current, v, e))} />
         <textarea ref={taRef} value={text} onChange={(e) => setText(e.target.value)} rows={1} placeholder={t("messages.placeholder")}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
@@ -183,9 +190,9 @@ function MessageList({ items, pending, isPending, error, showAuthor, typing }: {
             {showTime && <p className="my-3 text-center text-[11px] text-muted">{fmtDateTime(m.createdAt, locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>}
             <div className={cn("flex items-end gap-2", m.mine ? "justify-end" : "justify-start")}>
               {showAuthor && !m.mine && (sameAuthor ? <span className="w-7" /> : <Link href={`/u/${m.from.handle}`}><Avatar user={m.from} size={28} /></Link>)}
-              <div className={cn("max-w-[82%] rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed shadow-sm sm:max-w-[70%]", m.media && (m.media.kind === "audio" ? "max-w-[90%] p-1.5" : "w-72 max-w-[82%] p-1.5"), m.mine ? "rounded-br-md bg-accent text-accent-ink" : "rounded-bl-md bg-bg-2 text-ink")}>
+              <div className={cn("max-w-[82%] rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed shadow-sm sm:max-w-[70%]", m.media && (m.media.kind === "audio" || m.media.kind === "file" ? "max-w-[90%] bg-transparent! p-0 shadow-none" : "w-72 max-w-[82%] p-1.5"), m.mine ? "rounded-br-md bg-accent text-accent-ink" : "rounded-bl-md bg-bg-2 text-ink")}>
                 {showAuthor && !m.mine && !sameAuthor && <p className={cn("mb-0.5 text-[11px] font-semibold text-accent", m.media && "px-2 pt-1")}>{m.from.name}</p>}
-                {m.media && (m.media.kind === "audio" ? <AudioMessage media={m.media} mine={m.mine} /> : <MediaGrid media={[m.media]} className={cn("border-0", m.text && "mb-1.5")} />)}
+                {m.media && (m.media.kind === "audio" ? <AudioMessage media={m.media} mine={m.mine} /> : m.media.kind === "file" ? <FileCard media={m.media} /> : <MediaGrid media={[m.media]} className={cn("border-0", m.text && "mb-1.5")} />)}
                 {m.text && (m.mine ? <p className={cn(m.media && "px-2 pb-1")} style={{ overflowWrap: "anywhere" }}>{m.text}</p> : <RichText text={m.text} className={cn(m.media && "px-2 pb-1")} />)}
                 {callLink(m.text) && (
                   <Link href={callLink(m.text)!} className={cn("btn mt-2 w-full py-1.5 text-xs", m.mine ? "bg-white/20 text-accent-ink hover:bg-white/30" : "btn-primary")}>

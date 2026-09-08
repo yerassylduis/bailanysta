@@ -203,6 +203,7 @@ export const DDL: string[] = [
  */
 export const SOFT_MIGRATIONS: string[] = [
   `ALTER TABLE media ADD COLUMN duration_ms INTEGER`,
+  `ALTER TABLE media ADD COLUMN file_name TEXT`,
   `ALTER TABLE users ADD COLUMN galaxy_id TEXT`,
   `ALTER TABLE posts ADD COLUMN repost_of_id TEXT`,
   `ALTER TABLE users ADD COLUMN avatar_url TEXT`,

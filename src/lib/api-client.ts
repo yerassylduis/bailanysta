@@ -1,4 +1,4 @@
-import type { AdminLogDto, AdminStatsDto, AdminUserDto, CallDto, CommentDto, ConversationDto, GalaxyDto, GalaxyLinkDto, GraphDto, MeDto, MediaDto, MessageDto, MuseRequest, MuseResponse, NotificationDto, Page, PostDto, SignalDto, SignalType, TrendingTag, UserDto, UserProfileDto } from "./types";
+import type { AdminLogDto, AdminStatsDto, AdminUserDto, CallDto, CommentDto, ConversationDto, FollowListItem, GalaxyDto, GalaxyLinkDto, GifDto, GraphDto, MeDto, MediaDto, MessageDto, MuseRequest, MuseResponse, NotificationDto, Page, PostDto, SignalDto, SignalType, TrendingTag, UserDto, UserProfileDto } from "./types";
 
 /** Тонкий типизированный клиент к собственному API. Единственная точка fetch на клиенте. */
 
@@ -76,6 +76,9 @@ export const api = {
     });
   },
 
+  gifs: (q: string) => request<{ items: GifDto[]; disabled: boolean }>(`/api/gifs${qs({ q: q || undefined })}`),
+  uploadFromUrl: (url: string) => request<MediaDto>("/api/upload/url", { method: "POST", body: JSON.stringify({ url }) }),
+  followList: (handle: string, kind: "followers" | "following") => request<{ items: FollowListItem[] }>(`/api/users/${handle}/${kind}`),
   conversations: () => request<{ items: ConversationDto[] }>("/api/messages"),
   messages: (handle: string, after?: string) => request<{ peer: UserDto; items: MessageDto[] }>(`/api/messages/${handle}${qs({ after })}`),
   sendMessage: (handle: string, body: { text?: string; mediaId?: string }) => request<MessageDto>(`/api/messages/${handle}`, { method: "POST", body: JSON.stringify(body) }),

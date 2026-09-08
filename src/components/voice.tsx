@@ -98,14 +98,27 @@ export function VoiceRecorder({ onRecorded, disabled, maxMs = 5 * 60_000 }: { on
   );
 }
 
-/** Плеер голосового: play/pause, полоса прогресса с перемоткой, длительность, скорость 1×/1,5×/2×. */
-export function AudioMessage({ media, mine }: { media: MediaDto; mine?: boolean }) {
+/** Псевдо-волна: детерминированные высоты столбиков из id — одинаковая у отправителя и получателя. */
+function waveBars(seed: string, n = 36): number[] {
+  let h = 2166136261;
+  for (const ch of seed) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) { h ^= h << 13; h ^= h >>> 17; h ^= h << 5; const v = ((h >>> 0) % 1000) / 1000; out.push(0.25 + 0.75 * (0.5 + 0.5 * Math.sin(i / 3.1)) * (0.4 + 0.6 * v)); }
+  return out;
+}
+
+/**
+ * Плеер голосового — самостоятельная карточка в контрастных цветах (не наследует цвет пузыря):
+ * шафрановая кнопка, волна с заливкой прогресса, длительность и скорость 1×/1,5×/2×.
+ */
+export function AudioMessage({ media }: { media: MediaDto; mine?: boolean }) {
   const { t } = useT();
   const ref = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [pos, setPos] = useState(0);
   const [dur, setDur] = useState((media.durationMs ?? 0) / 1000);
   const speed = useSyncExternalStore(subscribeSpeed, readSpeed, () => 1);
+  const bars = waveBars(media.id);
 
   useEffect(() => { if (ref.current) ref.current.playbackRate = speed; }, [speed]);
 
@@ -113,24 +126,26 @@ export function AudioMessage({ media, mine }: { media: MediaDto; mine?: boolean 
   const seek = (e: React.MouseEvent<HTMLDivElement>) => { const a = ref.current; if (!a || !dur) return; const r = e.currentTarget.getBoundingClientRect(); a.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * dur; };
   const cycle = () => setSpeed(SPEEDS[(SPEEDS.indexOf(speed as typeof SPEEDS[number]) + 1) % SPEEDS.length]);
   const pct = dur ? Math.min(100, (pos / dur) * 100) : 0;
-  const fg = mine ? "bg-white" : "bg-accent", track = mine ? "bg-white/30" : "bg-line-strong";
 
   return (
-    <div className="flex w-64 max-w-full items-center gap-2 px-1.5 py-1" data-testid="voice-message">
+    <div className="flex w-[280px] max-w-full items-center gap-3 rounded-2xl border border-line bg-elev px-3 py-2.5 text-ink shadow-sm" data-testid="voice-message">
       <audio ref={ref} src={media.url} preload="metadata"
         onLoadedMetadata={(e) => { const d = e.currentTarget.duration; if (Number.isFinite(d) && d > 0) setDur(d); }}
         onDurationChange={(e) => { const d = e.currentTarget.duration; if (Number.isFinite(d) && d > 0) setDur(d); }}
         onTimeUpdate={(e) => setPos(e.currentTarget.currentTime)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => { setPlaying(false); setPos(0); }} />
-      <button type="button" onClick={toggle} className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full", mine ? "bg-white/20 text-white" : "bg-accent text-white")} aria-label={playing ? t("emoji.pause") : t("emoji.play")}>
-        {playing ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
+      <button type="button" onClick={toggle} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-saffron text-[#1a1a1a] shadow-card transition hover:brightness-105 active:scale-95" aria-label={playing ? t("emoji.pause") : t("emoji.play")}>
+        {playing ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
       </button>
       <div className="min-w-0 flex-1">
-        <div className={cn("relative h-1.5 w-full cursor-pointer overflow-hidden rounded-full", track)} onClick={seek} role="slider" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
-          <div className={cn("absolute inset-y-0 left-0 rounded-full", fg)} style={{ width: `${pct}%` }} />
+        <div className="relative flex h-8 w-full cursor-pointer items-center gap-[2px]" onClick={seek} role="slider" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)} aria-label={t("emoji.voice")}>
+          {bars.map((b, i) => {
+            const on = (i / bars.length) * 100 < pct;
+            return <span key={i} className={cn("flex-1 rounded-full transition-colors", on ? "bg-accent" : "bg-line-strong")} style={{ height: `${Math.round(b * 100)}%`, minWidth: 2 }} />;
+          })}
         </div>
-        <div className={cn("mt-1 flex items-center justify-between text-[11px] tabular-nums", mine ? "text-white/85" : "text-muted")}>
-          <span>{fmtClock((playing || pos > 0 ? pos : dur) * 1000)}</span>
-          <button type="button" onClick={cycle} className={cn("rounded-md px-1.5 py-0.5 font-semibold", mine ? "bg-white/20 text-white" : "bg-bg-2 text-ink-2")} title={t("emoji.speed")}>{speed === 1 ? "1×" : speed === 1.5 ? "1,5×" : "2×"}</button>
+        <div className="mt-1 flex items-center justify-between text-[11px] tabular-nums text-muted">
+          <span className="font-semibold text-ink-2">{fmtClock((playing || pos > 0 ? pos : dur) * 1000)}</span>
+          <button type="button" onClick={cycle} className="rounded-md bg-accent-soft px-2 py-0.5 font-bold text-accent" title={t("emoji.speed")}>{speed === 1 ? "1×" : speed === 1.5 ? "1,5×" : "2×"}</button>
         </div>
       </div>
     </div>

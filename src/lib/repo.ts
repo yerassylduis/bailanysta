@@ -3,7 +3,7 @@ import { getDb, schema } from "@/db";
 import { HttpError, isAdmin, isBanned } from "./auth";
 import { newId, nowIso } from "./ids";
 import { extractMentions, extractTags, hueFromHandle } from "./text";
-import type { CommentDto, GraphDto, MediaDto, MeDto, NotificationDto, Page, PostDto, TrendingTag, UserDto, UserProfileDto } from "./types";
+import type { CommentDto, FollowListItem, GraphDto, MediaDto, MeDto, NotificationDto, Page, PostDto, TrendingTag, UserDto, UserProfileDto } from "./types";
 import type { Media, User } from "@/db/schema";
 import { BOT_HANDLE } from "./bot";
 import { ensureGalaxies } from "./repo-galaxies";
@@ -29,7 +29,7 @@ export const toMeDto = (u: User): MeDto => ({
 
 
 export const toMediaDto = (m: Media): MediaDto => ({
-  id: m.id, kind: m.kind as MediaDto["kind"], mime: m.mime, url: m.url, width: m.width, height: m.height, durationMs: m.durationMs ?? null,
+  id: m.id, kind: m.kind as MediaDto["kind"], mime: m.mime, url: m.url, width: m.width, height: m.height, size: m.size, durationMs: m.durationMs ?? null, name: m.fileName ?? null,
 });
 
 /* -------------------------------- media --------------------------------- */
@@ -128,6 +128,25 @@ export async function getProfile(handle: string, viewerId: string | null): Promi
     viewerFollows: vf.length > 0,
     isViewer: viewerId === u.id,
   };
+}
+
+/** Подписчики или подписки пользователя — с числом подписчиков и флагом «я подписан» для кнопки в списке. */
+export async function listFollowList(handle: string, kind: "followers" | "following", viewerId: string | null): Promise<FollowListItem[]> {
+  const db = await getDb();
+  const u = await findUserByHandle(handle);
+  if (!u) throw new HttpError(404, "Пользователь не найден");
+  const rows = kind === "followers"
+    ? await db.select({ u: users, at: follows.createdAt }).from(follows).innerJoin(users, eq(follows.followerId, users.id)).where(eq(follows.followeeId, u.id)).orderBy(desc(follows.createdAt)).limit(200)
+    : await db.select({ u: users, at: follows.createdAt }).from(follows).innerJoin(users, eq(follows.followeeId, users.id)).where(eq(follows.followerId, u.id)).orderBy(desc(follows.createdAt)).limit(200);
+  const ids = rows.map((r) => r.u.id);
+  if (!ids.length) return [];
+  const [fc, mine] = await Promise.all([
+    db.select({ id: follows.followeeId, n: count() }).from(follows).where(inArray(follows.followeeId, ids)).groupBy(follows.followeeId),
+    viewerId ? db.select({ id: follows.followeeId }).from(follows).where(and(eq(follows.followerId, viewerId), inArray(follows.followeeId, ids))) : Promise.resolve([]),
+  ]);
+  const fcm = new Map(fc.map((x) => [x.id, x.n]));
+  const mineSet = new Set(mine.map((x) => x.id));
+  return rows.map((r) => ({ ...toUserDto(r.u), followers: fcm.get(r.u.id) ?? 0, viewerFollows: mineSet.has(r.u.id) }));
 }
 
 export async function searchUsers(q: string, limit = 8): Promise<UserDto[]> {

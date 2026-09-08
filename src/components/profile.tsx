@@ -14,6 +14,8 @@ import { useToast } from "./toast";
 import { cn, fmtDate } from "@/lib/format";
 import { useT } from "./locale-provider";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
+import { Users } from "lucide-react";
 
 /** Страница профиля: шапка со статистикой, редактирование (своего), редактор, посты автора. */
 export function Profile({ handle }: { handle: string }) {
@@ -24,6 +26,7 @@ export function Profile({ handle }: { handle: string }) {
   const toast = useToast();
   const { t, locale } = useT();
   const [edit, setEdit] = useState(false);
+  const [list, setList] = useState<"followers" | "following" | null>(null);
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
   const [phone, setPhone] = useState("");
@@ -149,9 +152,14 @@ export function Profile({ handle }: { handle: string }) {
               ["following", p.stats.following, t("profile.statFollowing")],
               ["likes", p.stats.likesReceived, t("profile.statLikes", { count: p.stats.likesReceived })],
             ] as const).map(([id, n, l]) => (
-              <div key={id}><dt className="font-display text-lg font-bold tabular-nums">{n}</dt><dd className="text-[11px] text-muted">{l}</dd></div>
+              id === "followers" || id === "following"
+                ? <button key={id} type="button" onClick={() => setList(id)} className="rounded-xl text-center transition hover:bg-accent-soft sm:text-left sm:px-2 sm:-mx-2" title={t(id === "followers" ? "profile.followersTitle" : "profile.followingTitle")}>
+                    <dt className="font-display text-lg font-bold tabular-nums">{n}</dt><dd className="text-[11px] text-muted underline decoration-dotted underline-offset-2">{l}</dd>
+                  </button>
+                : <div key={id}><dt className="font-display text-lg font-bold tabular-nums">{n}</dt><dd className="text-[11px] text-muted">{l}</dd></div>
             ))}
           </dl>
+          {list && <FollowListModal handle={p.handle} kind={list} onClose={() => setList(null)} />}
         </div>
       </section>
 
@@ -168,6 +176,40 @@ function ProfileSkeleton() {
     <div className="space-y-5">
       <div className="card overflow-hidden"><Skeleton className="h-28 w-full rounded-none!" /><div className="px-6 pb-6"><Skeleton className="-mt-10 h-[84px] w-[84px] rounded-full!" /><Skeleton className="mt-4 h-6 w-48" /><Skeleton className="mt-2 h-3 w-24" /><Skeleton className="mt-4 h-3 w-80" /></div></div>
       <Skeleton className="h-40 w-full rounded-2xl!" />
+    </div>
+  );
+}
+
+/** Всплывающий список подписчиков / подписок: переход в профиль и кнопка подписки с текущим статусом. */
+function FollowListModal({ handle, kind, onClose }: { handle: string; kind: "followers" | "following"; onClose: () => void }) {
+  const { t } = useT();
+  const { data: meData } = useMe();
+  const q = useQuery({ queryKey: ["follow-list", handle, kind], queryFn: () => api.followList(handle, kind), staleTime: 15_000 });
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose} role="dialog" aria-modal="true" aria-label={t(kind === "followers" ? "profile.followersTitle" : "profile.followingTitle")}>
+      <div className="card max-h-[80vh] w-full max-w-md overflow-hidden rounded-b-none sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-line px-4 py-3">
+          <h3 className="flex items-center gap-2 font-display text-base font-bold"><Users size={18} className="text-accent" /> {t(kind === "followers" ? "profile.followersTitle" : "profile.followingTitle")}{q.data && <span className="text-sm font-semibold text-muted">· {q.data.items.length}</span>}</h3>
+          <button onClick={onClose} className="btn btn-ghost btn-icon h-8 w-8" aria-label={t("common.close")}><X size={16} /></button>
+        </div>
+        <div className="max-h-[calc(80vh-56px)] overflow-y-auto p-2">
+          {q.isPending && <div className="space-y-2 p-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-12 w-full" />)}</div>}
+          {q.isError && <p className="p-4 text-center text-sm text-rose">{q.error.message}</p>}
+          {q.data && q.data.items.length === 0 && <p className="p-6 text-center text-sm text-muted">{t(kind === "followers" ? "profile.emptyFollowers" : "profile.emptyFollowing")}</p>}
+          {q.data?.items.map((u) => (
+            <div key={u.id} className="flex items-center gap-3 rounded-xl px-2 py-2 transition hover:bg-bg-2">
+              <Link href={`/u/${u.handle}`} onClick={onClose} className="flex min-w-0 flex-1 items-center gap-3">
+                <Avatar user={u} size={40} />
+                <span className="min-w-0 leading-tight">
+                  <span className="block truncate text-sm font-semibold">{u.name}</span>
+                  <span className="block truncate text-xs text-muted">@{u.handle} · {t("common.followers", { count: u.followers })}</span>
+                </span>
+              </Link>
+              {meData?.user?.id !== u.id && <FollowButton handle={u.handle} following={u.viewerFollows} className="px-3 py-1.5 text-xs" />}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

@@ -108,6 +108,8 @@ export const media = sqliteTable("media", {
   url: text("url").notNull(),
   /** Длительность аудио/видео в миллисекундах (для голосовых). */
   durationMs: integer("duration_ms"),
+  /** Исходное имя файла (для документов). */
+  fileName: text("file_name"),
   createdAt: text("created_at").notNull(),
 });
 

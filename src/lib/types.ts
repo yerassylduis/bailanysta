@@ -34,14 +34,19 @@ export type UserProfileDto = UserDto & {
 
 export type MediaDto = {
   id: string;
-  kind: "image" | "video" | "audio";
+  kind: "image" | "video" | "audio" | "file";
   mime: string;
   url: string;
   width: number | null;
   height: number | null;
+  size: number;
   /** Длительность голосового в мс */
   durationMs: number | null;
+  /** Имя документа */
+  name: string | null;
 };
+export type GifDto = { id: string; url: string; preview: string; width: number; height: number };
+export type FollowListItem = UserDto & { followers: number; viewerFollows: boolean };
 
 export type PostDto = {
   id: string;

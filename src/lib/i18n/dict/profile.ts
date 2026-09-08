@@ -3,6 +3,7 @@ import type { Namespace } from "../index";
 /** Неймспейс «profile». Ключи одинаковы во всех трёх языках; множественное число — key.one/few/many/other. */
 const profile: Namespace = {
   ru: {
+    followersTitle: "Подписчики", followingTitle: "Подписки", emptyFollowers: "Пока никто не подписался", emptyFollowing: "Пока ни на кого не подписан(а)",
     error: "Ошибка", avatarUpdated: "Аватар обновлён", uploadFailed: "Не удалось загрузить", coverUpdated: "Фон обновлён", coverUploadFailed: "Не удалось загрузить фон",
     notFoundTitle: "Такого человека здесь нет", notFoundText: "@{handle} ещё не присоединился к Expert Bailanysta.", toFeed: "В ленту", updated: "Профиль обновлён",
     coverN: "Фон {n}", ownImage: "Своя картинка", coverReset: "Фон сброшен", reset: "Сбросить", changeAvatar: "Сменить аватар", avatarRemoved: "Аватар убран", removeAvatar: "Убрать аватар",
@@ -17,6 +18,7 @@ const profile: Namespace = {
     emptyOwnText: "Первый пост — самый лёгкий. Cosmos поможет.", emptyText: "Автор ещё собирается с мыслями.",
   },
   kk: {
+    followersTitle: "Жазылушылар", followingTitle: "Жазылымдар", emptyFollowers: "Әзірге ешкім жазылмаған", emptyFollowing: "Әзірге ешкімге жазылмаған",
     error: "Қате", avatarUpdated: "Аватар жаңартылды", uploadFailed: "Жүктеу мүмкін болмады", coverUpdated: "Фон жаңартылды", coverUploadFailed: "Фонды жүктеу мүмкін болмады",
     notFoundTitle: "Мұнда мұндай адам жоқ", notFoundText: "@{handle} Expert Bailanysta-ға әлі қосылмаған.", toFeed: "Лентаға", updated: "Профиль жаңартылды",
     coverN: "Фон {n}", ownImage: "Өз суретім", coverReset: "Фон әдепкі күйге келтірілді", reset: "Қалпына келтіру", changeAvatar: "Аватарды ауыстыру", avatarRemoved: "Аватар алынды", removeAvatar: "Аватарды алып тастау",
@@ -28,6 +30,7 @@ const profile: Namespace = {
     emptyOwnText: "Бірінші жазба — ең жеңілі. Cosmos көмектеседі.", emptyText: "Автор әлі ойын жинап жатыр.",
   },
   en: {
+    followersTitle: "Followers", followingTitle: "Following", emptyFollowers: "No followers yet", emptyFollowing: "Not following anyone yet",
     error: "Error", avatarUpdated: "Avatar updated", uploadFailed: "Upload failed", coverUpdated: "Cover updated", coverUploadFailed: "Couldn't upload the cover",
     notFoundTitle: "No such person here", notFoundText: "@{handle} hasn't joined Expert Bailanysta yet.", toFeed: "To the feed", updated: "Profile updated",
     coverN: "Cover {n}", ownImage: "Own picture", coverReset: "Cover reset", reset: "Reset", changeAvatar: "Change avatar", avatarRemoved: "Avatar removed", removeAvatar: "Remove avatar",

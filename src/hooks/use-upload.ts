@@ -9,7 +9,7 @@ import type { MediaDto } from "@/lib/types";
  * Загрузка медиа: фото сжимаются в браузере (до 1920px, WebP/JPEG ~85%),
  * чтобы не упираться в лимиты тела запроса на serverless; видео уходит как есть.
  */
-export type Attachment = { localId: string; kind: MediaDto["kind"]; preview: string; progress: number; media: MediaDto | null; error: string | null };
+export type Attachment = { localId: string; kind: MediaDto["kind"]; name?: string; preview: string; progress: number; media: MediaDto | null; error: string | null };
 
 const MAX_SIDE = 1920;
 
@@ -40,7 +40,7 @@ function imageDims(file: File) {
   });
 }
 
-export function useUpload(limits = { images: 4, videos: 1 }, opts: { maxSide?: number } = {}) {
+export function useUpload(limits: { images: number; videos: number; files?: number } = { images: 4, videos: 1 }, opts: { maxSide?: number } = {}) {
   const maxSide = opts.maxSide ?? MAX_SIDE;
   const [items, setItems] = useState<Attachment[]>([]);
 
@@ -50,18 +50,19 @@ export function useUpload(limits = { images: 4, videos: 1 }, opts: { maxSide?: n
     const list = Array.from(files);
     const done: MediaDto[] = [];
     for (const file of list) {
-      const kind = file.type.startsWith("video/") ? "video" : file.type.startsWith("image/") ? "image" : null;
+      const kind: MediaDto["kind"] | null = file.type.startsWith("video/") ? "video" : file.type.startsWith("image/") ? "image" : file.type.startsWith("audio/") ? "audio" : (limits.files ?? 0) > 0 ? "file" : null;
       if (!kind) continue;
       let blocked = false;
       setItems((xs) => {
-        const imgs = xs.filter((x) => x.kind === "image").length, vids = xs.filter((x) => x.kind === "video").length;
-        if ((kind === "video" && (vids >= limits.videos || imgs > 0)) || (kind === "image" && (imgs >= limits.images || vids > 0))) { blocked = true; return xs; }
+        const imgs = xs.filter((x) => x.kind === "image").length, vids = xs.filter((x) => x.kind === "video").length, docs = xs.filter((x) => x.kind === "file" || x.kind === "audio").length;
+        if (kind === "file" || kind === "audio") { if (docs >= (limits.files ?? 0) || imgs + vids > 0) blocked = true; return xs; }
+        if (docs > 0 || (kind === "video" && (vids >= limits.videos || imgs > 0)) || (kind === "image" && (imgs >= limits.images || vids > 0))) { blocked = true; return xs; }
         return xs;
       });
       if (blocked) continue;
       const localId = Math.random().toString(36).slice(2);
       const preview = URL.createObjectURL(file);
-      setItems((xs) => [...xs, { localId, kind, preview, progress: 0, media: null, error: null }]);
+      setItems((xs) => [...xs, { localId, kind, name: file.name, preview, progress: 0, media: null, error: null }]);
       try {
         let blob: Blob = file, dims: { width: number; height: number } | undefined;
         if (kind === "image") { const c = await compressImage(file, maxSide); blob = c.blob; dims = { width: c.width, height: c.height }; }
@@ -73,7 +74,7 @@ export function useUpload(limits = { images: 4, videos: 1 }, opts: { maxSide?: n
       }
     }
     return done;
-  }, [limits.images, limits.videos, maxSide]);
+  }, [limits.images, limits.videos, limits.files, maxSide]);
 
   const remove = useCallback((localId: string) => setItems((xs) => xs.filter((x) => x.localId !== localId)), []);
   const reset = useCallback(() => setItems([]), []);

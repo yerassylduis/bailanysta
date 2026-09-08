@@ -228,7 +228,7 @@ export function useFollow(handle: string) {
       qc.setQueryData<UserProfileDto>(keys.profile(handle), (p) =>
         p ? { ...p, viewerFollows: follow, stats: { ...p.stats, followers: p.stats.followers + (follow ? 1 : -1) } } : p);
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: keys.profile(handle) }); qc.invalidateQueries({ queryKey: keys.suggested }); qc.invalidateQueries({ queryKey: keys.graph }); qc.invalidateQueries({ queryKey: ["posts", { scope: "following" }] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: keys.profile(handle) }); qc.invalidateQueries({ queryKey: ["follow-list"] }); qc.invalidateQueries({ queryKey: keys.suggested }); qc.invalidateQueries({ queryKey: keys.graph }); qc.invalidateQueries({ queryKey: ["posts", { scope: "following" }] }); },
     onError: () => qc.invalidateQueries({ queryKey: keys.profile(handle) }),
   });
 }
