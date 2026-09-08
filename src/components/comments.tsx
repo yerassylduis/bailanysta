@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { Send, Sparkles, Heart, Reply, X } from "lucide-react";
 import { useAddComment, useComments, useLikeComment, useMe, useMuse } from "@/hooks/use-data";
@@ -10,6 +10,7 @@ import type { CommentDto } from "@/lib/types";
 import { Avatar, Skeleton } from "./ui";
 import { RichText } from "./rich-text";
 import { useToast } from "./toast";
+import { EmojiPicker, insertAtCursor } from "./emoji-picker";
 import { useT } from "./locale-provider";
 
 /**
@@ -25,6 +26,7 @@ export function Comments({ postId, postText }: { postId: string; postText: strin
   const toast = useToast();
   const { t } = useT();
   const [text, setText] = useState("");
+  const taRef = useRef<HTMLTextAreaElement>(null);
   const [replyTo, setReplyTo] = useState<CommentDto | null>(null);
 
   const submit = async () => {
@@ -69,7 +71,7 @@ export function Comments({ postId, postText }: { postId: string; postText: strin
                 <button onClick={() => { setReplyTo(null); setText(""); }} className="ml-auto flex h-5 w-5 items-center justify-center rounded-full hover:bg-bg-2" aria-label={t("posts.cancelReply")}><X size={12} /></button>
               </div>
             )}
-            <textarea id="comment-input" value={text} onChange={(e) => setText(e.target.value)} maxLength={COMMENT_MAX} rows={2}
+            <textarea ref={taRef} id="comment-input" value={text} onChange={(e) => setText(e.target.value)} maxLength={COMMENT_MAX} rows={2}
               onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") submit(); if (e.key === "Escape" && replyTo) { setReplyTo(null); setText(""); } }}
               placeholder={replyTo ? t("posts.replyPlaceholder") : t("posts.commentPlaceholder")} className="input resize-none" />
             {muse.data && (
@@ -81,6 +83,7 @@ export function Comments({ postId, postText }: { postId: string; postText: strin
               <button onClick={() => muse.mutate({ mode: "reply", text: replyTo ? replyTo.text : postText })} disabled={muse.isPending} className="btn btn-ghost px-3 py-1.5 text-xs text-saffron">
                 <Sparkles size={14} /> {muse.isPending ? t("posts.cosmosThinking") : t("posts.suggestReply")}
               </button>
+              <EmojiPicker onPick={(e) => setText((v) => insertAtCursor(taRef.current, v, e))} size={16} />
               <span className="ml-auto text-xs text-muted">{COMMENT_MAX - text.length}</span>
               <button onClick={submit} disabled={!text.trim() || add.isPending} className="btn btn-primary px-3 py-1.5 text-xs"><Send size={14} /> {t("common.send")}</button>
             </div>

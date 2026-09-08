@@ -56,10 +56,11 @@ export const api = {
   bookmark: (id: string, bookmarked: boolean) => request<{ bookmarkedByViewer: boolean }>(`/api/posts/${id}/bookmark`, { method: "PUT", body: JSON.stringify({ bookmarked }) }),
 
   /** Загрузка файла — единственный не-JSON запрос. */
-  upload: async (file: File | Blob, dims?: { width: number; height: number }, onProgress?: (p: number) => void) => {
+  upload: async (file: File | Blob, dims?: { width: number; height: number }, onProgress?: (p: number) => void, extra?: Record<string, string | number>) => {
     const fd = new FormData();
-    fd.append("file", file, file instanceof File ? file.name : "upload");
+    fd.append("file", file, file instanceof File ? file.name : `upload.${(file.type.split("/")[1] ?? "bin").split(";")[0]}`);
     if (dims) { fd.append("width", String(dims.width)); fd.append("height", String(dims.height)); }
+    for (const [k, v] of Object.entries(extra ?? {})) fd.append(k, String(v));
     return new Promise<MediaDto>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/api/upload");

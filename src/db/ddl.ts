@@ -202,6 +202,7 @@ export const DDL: string[] = [
  * Ошибка «duplicate column» игнорируется вызывающей стороной.
  */
 export const SOFT_MIGRATIONS: string[] = [
+  `ALTER TABLE media ADD COLUMN duration_ms INTEGER`,
   `ALTER TABLE users ADD COLUMN galaxy_id TEXT`,
   `ALTER TABLE posts ADD COLUMN repost_of_id TEXT`,
   `ALTER TABLE users ADD COLUMN avatar_url TEXT`,

@@ -6,6 +6,7 @@ import type { RouteCtx } from "@/lib/http";
 const MIME: Record<string, string> = {
   jpg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", avif: "image/avif",
   mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime",
+  weba: "audio/webm", ogg: "audio/ogg", m4a: "audio/mp4", mp3: "audio/mpeg", wav: "audio/wav", aac: "audio/aac",
 };
 
 /** Отдаёт локально сохранённые файлы. Поддерживает Range — иначе Safari не проигрывает видео. */

@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Send, ImagePlus, X, MessageCircleMore, Users, Plus, UserPlus, LogOut, Bot, Video } from "lucide-react";
+import { ArrowLeft, Send, ImagePlus, X, MessageCircleMore, Users, Plus, UserPlus, LogOut, Bot, Video, Phone } from "lucide-react";
+import { EmojiPicker, insertAtCursor } from "./emoji-picker";
+import { AudioMessage, VoiceRecorder } from "./voice";
 import { useConversations, useCreateGroup, useGroupMessages, useMe, useMessages, useSendGroupMessage, useSendMessage } from "@/hooks/use-data";
 import { useUpload } from "@/hooks/use-upload";
 import { api } from "@/lib/api-client";
@@ -107,6 +109,13 @@ function Composer({ onSend, pending, isBot, onQuick }: { onSend: (body: { text?:
   const toast = useToast();
   const { t } = useT();
   const [text, setText] = useState("");
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  const sendVoice = async (blob: Blob, durationMs: number) => {
+    try {
+      const m = await api.upload(blob, undefined, undefined, { durationMs });
+      await onSend({ mediaId: m.id });
+    } catch (e) { toast(e instanceof Error ? e.message : t("messages.sendFailed"), "error"); }
+  };
   const submit = async () => {
     const body = text.trim();
     const mediaId = upload.mediaIds[0];
@@ -141,11 +150,14 @@ function Composer({ onSend, pending, isBot, onQuick }: { onSend: (body: { text?:
           <ImagePlus size={20} />
           <input type="file" accept="image/*,video/*" className="hidden" onChange={(e) => { if (e.target.files?.length) upload.add(e.target.files); e.target.value = ""; }} />
         </label>
-        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={1} placeholder={t("messages.placeholder")}
+        <EmojiPicker onPick={(e) => setText((v) => insertAtCursor(taRef.current, v, e))} />
+        <textarea ref={taRef} value={text} onChange={(e) => setText(e.target.value)} rows={1} placeholder={t("messages.placeholder")}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
           onPaste={(e) => { const f = Array.from(e.clipboardData.files ?? []); if (f.length) { e.preventDefault(); upload.add(f); } }}
           className="input max-h-32 min-h-10 flex-1 resize-none py-2.5" />
-        <button onClick={submit} disabled={(!text.trim() && !upload.mediaIds.length) || pending || upload.uploading} className="btn btn-primary btn-icon shrink-0" aria-label={t("common.send")}><Send size={18} /></button>
+        {!text.trim() && !upload.items.length
+          ? <VoiceRecorder onRecorded={sendVoice} disabled={pending} />
+          : <button onClick={submit} disabled={(!text.trim() && !upload.mediaIds.length) || pending || upload.uploading} className="btn btn-primary btn-icon shrink-0" aria-label={t("common.send")}><Send size={18} /></button>}
       </div>
     </div>
   );
@@ -171,9 +183,9 @@ function MessageList({ items, pending, isPending, error, showAuthor, typing }: {
             {showTime && <p className="my-3 text-center text-[11px] text-muted">{fmtDateTime(m.createdAt, locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>}
             <div className={cn("flex items-end gap-2", m.mine ? "justify-end" : "justify-start")}>
               {showAuthor && !m.mine && (sameAuthor ? <span className="w-7" /> : <Link href={`/u/${m.from.handle}`}><Avatar user={m.from} size={28} /></Link>)}
-              <div className={cn("max-w-[82%] rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed shadow-sm sm:max-w-[70%]", m.media && "w-72 max-w-[82%] p-1.5", m.mine ? "rounded-br-md bg-accent text-accent-ink" : "rounded-bl-md bg-bg-2 text-ink")}>
+              <div className={cn("max-w-[82%] rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed shadow-sm sm:max-w-[70%]", m.media && (m.media.kind === "audio" ? "max-w-[90%] p-1.5" : "w-72 max-w-[82%] p-1.5"), m.mine ? "rounded-br-md bg-accent text-accent-ink" : "rounded-bl-md bg-bg-2 text-ink")}>
                 {showAuthor && !m.mine && !sameAuthor && <p className={cn("mb-0.5 text-[11px] font-semibold text-accent", m.media && "px-2 pt-1")}>{m.from.name}</p>}
-                {m.media && <MediaGrid media={[m.media]} className={cn("border-0", m.text && "mb-1.5")} />}
+                {m.media && (m.media.kind === "audio" ? <AudioMessage media={m.media} mine={m.mine} /> : <MediaGrid media={[m.media]} className={cn("border-0", m.text && "mb-1.5")} />)}
                 {m.text && (m.mine ? <p className={cn(m.media && "px-2 pb-1")} style={{ overflowWrap: "anywhere" }}>{m.text}</p> : <RichText text={m.text} className={cn(m.media && "px-2 pb-1")} />)}
                 {callLink(m.text) && (
                   <Link href={callLink(m.text)!} className={cn("btn mt-2 w-full py-1.5 text-xs", m.mine ? "bg-white/20 text-accent-ink hover:bg-white/30" : "btn-primary")}>
@@ -211,6 +223,7 @@ function DmThread({ handle }: { handle: string }) {
             </span>
           </Link>
         ) : <Skeleton className="h-9 w-40" />}
+        {q.data && !isBot && <span className="ml-auto"><CallButton title={t("emoji.callTitleDm", { name: q.data.peer.name })} sendLink={(text) => send.mutateAsync({ text })} handle={q.data.peer.handle} /></span>}
       </header>
       <MessageList items={q.data?.items ?? []} isPending={q.isPending} error={q.error?.message} pending={send.isPending} typing={isBot ? t("messages.botTyping") : undefined} />
       <Composer onSend={(b) => send.mutateAsync(b)} pending={send.isPending} isBot={isBot} onQuick={(text) => send.mutateAsync({ text })} />
@@ -254,6 +267,7 @@ function GroupThread({ id }: { id: string }) {
               <span className="block truncate text-sm font-semibold">{conv.title}</span>
               <span className="block truncate text-xs text-muted">{t("messages.members", { count: conv.members.length })} · {conv.members.map((m) => m.name.split(/\s+/)[0]).join(", ")}</span>
             </span>
+            <CallButton title={t("emoji.callTitleGroup", { title: conv.title ?? "" })} sendLink={(text) => send.mutateAsync({ text })} />
             <button onClick={() => setAdding((a) => !a)} className="btn btn-ghost btn-icon h-9 w-9" title={t("messages.addMember")}><UserPlus size={17} /></button>
             <button onClick={leave} className="btn btn-ghost btn-icon h-9 w-9 text-rose" title={t("messages.leaveGroup")}><LogOut size={17} /></button>
           </>
@@ -324,6 +338,30 @@ function CreateGroupDialog({ onClose }: { onClose: () => void }) {
 }
 
 /** Ссылка на созвон внутри текста сообщения → относительный путь для кнопки. */
+/** Звонок из чата: создаёт комнату Байланыс, кидает ссылку в этот диалог/группу и ведёт в комнату. Аудио — просто не включать камеру. */
+function CallButton({ title, sendLink, handle }: { title: string; sendLink: (text: string) => Promise<unknown>; handle?: string }) {
+  const { t } = useT();
+  const router = useRouter();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const start = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const call = await api.createCall(title.slice(0, 80));
+      const link = `${location.origin}/calls/${call.id}`;
+      if (handle) await api.inviteToCall(call.id, handle); // личка: сообщение + уведомление с кнопкой «Присоединиться»
+      else await sendLink(t("emoji.callMessage", { title: call.title, link }));
+      router.push(`/calls/${call.id}`);
+    } catch (e) { toast(e instanceof Error ? e.message : t("messages.error"), "error"); setBusy(false); }
+  };
+  return (
+    <button onClick={start} disabled={busy} className={cn("btn btn-ghost btn-icon h-9 w-9 text-accent", busy && "animate-pulse")} title={`${t("emoji.call")} · ${t("emoji.callHint")}`} aria-label={t("emoji.call")}>
+      <Phone size={17} />
+    </button>
+  );
+}
+
 function callLink(text: string): string | null {
   const m = /\/calls\/([a-z0-9]{3}-[a-z0-9]{3}-[a-z0-9]{3})/i.exec(text);
   return m ? `/calls/${m[1].toLowerCase()}` : null;

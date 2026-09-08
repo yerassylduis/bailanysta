@@ -9,7 +9,7 @@ import type { MediaDto } from "@/lib/types";
  * Загрузка медиа: фото сжимаются в браузере (до 1920px, WebP/JPEG ~85%),
  * чтобы не упираться в лимиты тела запроса на serverless; видео уходит как есть.
  */
-export type Attachment = { localId: string; kind: "image" | "video"; preview: string; progress: number; media: MediaDto | null; error: string | null };
+export type Attachment = { localId: string; kind: MediaDto["kind"]; preview: string; progress: number; media: MediaDto | null; error: string | null };
 
 const MAX_SIDE = 1920;
 

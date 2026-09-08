@@ -34,11 +34,13 @@ export type UserProfileDto = UserDto & {
 
 export type MediaDto = {
   id: string;
-  kind: "image" | "video";
+  kind: "image" | "video" | "audio";
   mime: string;
   url: string;
   width: number | null;
   height: number | null;
+  /** Длительность голосового в мс */
+  durationMs: number | null;
 };
 
 export type PostDto = {

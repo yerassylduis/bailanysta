@@ -21,6 +21,7 @@ import muse from "./dict/muse";
 import palette from "./dict/palette";
 import search from "./dict/search";
 import settings from "./dict/settings";
+import emoji from "./dict/emoji";
 
 export const LOCALES = ["kk", "ru", "en"] as const;
 export type Locale = (typeof LOCALES)[number];
@@ -37,7 +38,7 @@ export type TFn = (key: string, vars?: Vars) => string;
 
 export const isLocale = (x: unknown): x is Locale => typeof x === "string" && (LOCALES as readonly string[]).includes(x);
 
-export const DICTS: Record<string, Namespace> = { common, nav, auth, admin, calls, messages, posts, notifications, feed, profile, explore, muse, palette, search, settings };
+export const DICTS: Record<string, Namespace> = { common, nav, auth, admin, calls, messages, posts, notifications, feed, profile, explore, muse, palette, search, settings, emoji };
 
 export function pluralCategory(locale: Locale, n: number): string {
   try { return new Intl.PluralRules(INTL_TAG[locale]).select(n); } catch { return "other"; }

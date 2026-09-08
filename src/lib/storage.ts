@@ -12,12 +12,15 @@ export const MEDIA_DIR = process.env.MEDIA_DIR ?? (process.env.VERCEL ? "/tmp/ba
 
 export const IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]);
 export const VIDEO_MIMES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
+export const AUDIO_MIMES = new Set(["audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav", "audio/x-m4a", "audio/aac"]);
+export const MAX_AUDIO_BYTES = 15 * 1024 * 1024;
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 export const MAX_VIDEO_BYTES = Number(process.env.MAX_VIDEO_MB ?? 60) * 1024 * 1024;
 
 const EXT: Record<string, string> = {
   "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/avif": "avif",
   "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov",
+  "audio/webm": "weba", "audio/ogg": "ogg", "audio/mp4": "m4a", "audio/mpeg": "mp3", "audio/wav": "wav", "audio/x-m4a": "m4a", "audio/aac": "aac",
 };
 
 export function extFor(mime: string) { return EXT[mime] ?? "bin"; }

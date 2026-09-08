@@ -29,7 +29,7 @@ export const toMeDto = (u: User): MeDto => ({
 
 
 export const toMediaDto = (m: Media): MediaDto => ({
-  id: m.id, kind: m.kind as MediaDto["kind"], mime: m.mime, url: m.url, width: m.width, height: m.height,
+  id: m.id, kind: m.kind as MediaDto["kind"], mime: m.mime, url: m.url, width: m.width, height: m.height, durationMs: m.durationMs ?? null,
 });
 
 /* -------------------------------- media --------------------------------- */

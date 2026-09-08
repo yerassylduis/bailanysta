@@ -12,6 +12,7 @@ import type { PostDto } from "@/lib/types";
 import { Avatar } from "./ui";
 import { MusePanel } from "./muse-panel";
 import { AttachButton, AttachmentPreviews } from "./media";
+import { EmojiPicker, insertAtCursor } from "./emoji-picker";
 import { useToast } from "./toast";
 import { useT } from "./locale-provider";
 
@@ -121,6 +122,7 @@ export function PostEditor({ post, onDone, autoFocus }: { post?: PostDto; onDone
 
       <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-line pt-3">
         <AttachButton onFiles={upload.add} disabled={busy} />
+        <EmojiPicker onPick={(e) => setText((v) => insertAtCursor(ref.current, v, e))} size={17} />
         <button type="button" onClick={() => setMuse((m) => !m)} className={cn("btn btn-ghost gap-1.5 px-3 text-saffron", muse && "bg-saffron-soft")} title={t("posts.cosmosTitle")}>
           <Sparkles size={17} /><span className="hidden sm:inline">Cosmos</span>
         </button>
