@@ -25,6 +25,7 @@ const W = 1600, H = 1000, PAD = 60;
 const HUES = [168, 34, 210, 350, 90, 265, 20, 140];
 const LONERS = "loners";
 const FULL: View = { x: 0, y: 0, w: W, h: H };
+const CAM_MS = 520;
 
 export function Constellation() {
   const graph = useGraph();
@@ -74,10 +75,10 @@ function seedNodes(graph: GraphDto, clusters: Cluster[], jitter = 0): Node[] {
   });
 }
 
-/** Радиус круга галактики в обзоре — от числа участников. */
-const discRadius = (members: number) => 64 + Math.min(46, members * 6);
 /** Радиус звезды в мировых единицах: от числа постов. При приближении камеры звезда растёт на экране. */
 const nodeRadius = (n: { posts: number }, maxPosts: number) => 14 + (n.posts / maxPosts) * 12;
+/** Половина ширины подписи галактики в мировых единицах (22px шрифт ≈ 11.5px на символ + счётчик). */
+const labelHalf = (label: string) => Math.min(260, label.length * 6 + 26);
 const initialsOf = (name: string) => name.replace(/^Галактика\s+/i, "").replace(/@/g, "").split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "★";
 
 /* --------------------------------- небо ---------------------------------- */
@@ -99,7 +100,8 @@ function Sky({ graph, meId, meAdmin }: { graph: GraphDto; meId: string | null; m
   const [panel, setPanel] = useState(false);
   /** Камера живёт вне React: viewBox пишется в DOM напрямую, чтобы зум не перерисовывал всё дерево каждый кадр. */
   const viewRef = useRef<View>(FULL);
-  const targetView = useRef<View>(FULL);
+  /** Полёт камеры по времени: from → to за CAM_MS с плавным замедлением — одинаково чётко при любой частоте кадров. */
+  const cam = useRef<{ from: View; to: View; start: number } | null>(null);
   const linkSet = useMemo(() => new Set(graph.links.map((l) => `${l.source}>${l.target}`)), [graph.links]);
   const clusterOf = useMemo(() => new Map(clusters.map((c) => [c.id, c])), [clusters]);
 
@@ -145,17 +147,18 @@ function Sky({ graph, meId, meAdmin }: { graph: GraphDto; meId: string | null; m
     const moving = energy > 0.15 || !!drag;
     if (moving) setSnap(ns.map((n) => ({ ...n })));
 
-    // камера: плавный полёт к цели без React — прямая запись viewBox
-    const v = viewRef.current, t = targetView.current;
+    // камера: полёт к цели по времени без React — прямая запись viewBox
     let camMoving = false;
-    if (v !== t) {
-      const k = 0.14;
-      const nv = { x: v.x + (t.x - v.x) * k, y: v.y + (t.y - v.y) * k, w: v.w + (t.w - v.w) * k, h: v.h + (t.h - v.h) * k };
-      const done = Math.abs(nv.w - t.w) < 0.4 && Math.abs(nv.x - t.x) < 0.4 && Math.abs(nv.y - t.y) < 0.4;
-      viewRef.current = done ? t : nv;
-      camMoving = !done;
-      const cv = viewRef.current;
-      svgRef.current?.setAttribute("viewBox", `${cv.x} ${cv.y} ${cv.w} ${cv.h}`);
+    const c = cam.current;
+    if (c) {
+      if (!c.start) c.start = performance.now();
+      const p = Math.min(1, (performance.now() - c.start) / CAM_MS);
+      const e = 1 - Math.pow(1 - p, 3); // ease-out cubic
+      const lerp = (a: number, b: number) => a + (b - a) * e;
+      const nv = p >= 1 ? c.to : { x: lerp(c.from.x, c.to.x), y: lerp(c.from.y, c.to.y), w: lerp(c.from.w, c.to.w), h: lerp(c.from.h, c.to.h) };
+      viewRef.current = nv;
+      svgRef.current?.setAttribute("viewBox", `${nv.x} ${nv.y} ${nv.w} ${nv.h}`);
+      if (p >= 1) cam.current = null; else camMoving = true;
     }
     if (moving || camMoving) frameRef.current = requestAnimationFrame(() => loopRef.current());
     else frameRef.current = 0;
@@ -183,10 +186,11 @@ function Sky({ graph, meId, meAdmin }: { graph: GraphDto; meId: string | null; m
     if (w / h > W / H) h = w * (H / W); else w = h * (W / H);
     const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
     x0 = cx - w / 2; y0 = cy - h / 2;
-    targetView.current = { x: x0, y: y0, w, h };
-    setFocus(id); setPanel(false); kick();
+    flyTo({ x: x0, y: y0, w, h });
+    setFocus(id); setPanel(false);
   };
-  const unfocus = () => { targetView.current = FULL; setFocus(null); setPanel(false); kick(); };
+  const flyTo = (to: View) => { cam.current = { from: viewRef.current, to, start: 0 }; kick(); }; // start проставится первым кадром
+  const unfocus = () => { flyTo(FULL); setFocus(null); setPanel(false); };
 
   const toSvg = (e: { clientX: number; clientY: number }) => {
     const r = svgRef.current!.getBoundingClientRect();
@@ -215,7 +219,8 @@ function Sky({ graph, meId, meAdmin }: { graph: GraphDto; meId: string | null; m
     dragRef.current = null; setDragging(null);
     if (!d.moved) {
       const n = nodesRef.current.find((x) => x.id === d.id);
-      if (n) router.push(`/u/${n.handle}`);
+      if (!n) return;
+      if (focus === n.cluster) router.push(`/u/${n.handle}`); else focusCluster(n.cluster);
     }
     kick();
   };
@@ -231,6 +236,14 @@ function Sky({ graph, meId, meAdmin }: { graph: GraphDto; meId: string | null; m
   const focused = focus ? clusterOf.get(focus) ?? null : null;
   const canEdit = !!focused?.galaxy && (meAdmin || (!!meId && focused.members.includes(meId)));
   const galaxyById = new Map(clusters.filter((c) => c.galaxy).map((c) => [c.id, c]));
+  /** Живая геометрия скопления: центроид звёзд и радиус разброса. */
+  const geo = new Map(clusters.map((c) => {
+    const ms = nodes.filter((n) => n.cluster === c.id);
+    if (!ms.length) return [c.id, { cx: c.cx, cy: c.cy, rad: 60 }] as const;
+    const cx = ms.reduce((a, n) => a + n.x, 0) / ms.length, cy = ms.reduce((a, n) => a + n.y, 0) / ms.length;
+    const rad = Math.max(48, ...ms.map((n) => Math.hypot(n.x - cx, n.y - cy) + nodeRadius(n, maxPosts))) + 26;
+    return [c.id, { cx, cy, rad }] as const;
+  }));
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-line" style={{ background: "radial-gradient(ellipse at 50% 40%, var(--elev), var(--bg) 75%)" }}>
@@ -252,14 +265,15 @@ function Sky({ graph, meId, meAdmin }: { graph: GraphDto; meId: string | null; m
               <stop offset="100%" stopColor={`hsl(${c.hue} 70% 62%)`} stopOpacity="0" />
             </radialGradient>
           ))}
-          {clusters.map((c) => <clipPath key={c.id} id={`clip-g-${c.id}`}><circle cx={c.cx} cy={c.cy} r={discRadius(c.members.length)} /></clipPath>)}
+          {clusters.map((c) => { const g = geo.get(c.id)!; return <clipPath key={c.id} id={`clip-g-${c.id}`}><circle cx={g.cx - labelHalf(c.label) - 6} cy={g.cy - g.rad - 20} r={16} /></clipPath>; })}
           {nodes.map((n) => <clipPath key={n.id} id={`clip-${n.id}`}><circle cx={n.x} cy={n.y} r={nodeRadius(n, maxPosts)} /></clipPath>)}
         </defs>
 
         {/* связи между галактиками с описанием */}
         {graph.galaxyLinks.map((l) => {
-          const a = galaxyById.get(l.from), b = galaxyById.get(l.to);
-          if (!a || !b) return null;
+          const ca = galaxyById.get(l.from), cb = galaxyById.get(l.to);
+          if (!ca || !cb) return null;
+          const a = geo.get(ca.id)!, b = geo.get(cb.id)!;
           const mx = (a.cx + b.cx) / 2, my = (a.cy + b.cy) / 2;
           const dx = b.cx - a.cx, dy = b.cy - a.cy, len = Math.hypot(dx, dy) || 1;
           // лёгкая дуга — перпендикулярный изгиб
@@ -268,7 +282,7 @@ function Sky({ graph, meId, meAdmin }: { graph: GraphDto; meId: string | null; m
           const lx = mx - (dy / len) * bend * 0.5, ly = my + (dx / len) * bend * 0.5;
           const text = l.description.length > 44 ? l.description.slice(0, 42) + "…" : l.description;
           const tw = Math.max(60, text.length * 8.2 + 28);
-          const dim = zoomed && focus !== a.id && focus !== b.id;
+          const dim = zoomed && focus !== ca.id && focus !== cb.id;
           return (
             <g key={l.id} opacity={dim ? 0.15 : zoomed ? 0.55 : 1} style={{ transition: "opacity .3s", pointerEvents: "none" }}>
               <path d={`M${a.cx},${a.cy} Q${qx},${qy} ${b.cx},${b.cy}`} fill="none" stroke="var(--accent)" strokeWidth={2.2} strokeDasharray="6 8" strokeOpacity={0.7} />
@@ -282,54 +296,52 @@ function Sky({ graph, meId, meAdmin }: { graph: GraphDto; meId: string | null; m
           );
         })}
 
-        {/* круги галактик (обзор) и туманности */}
+        {/* туманности скоплений и названия галактик сверху */}
         {clusters.map((c) => {
-          const R = discRadius(c.members.length);
+          const g = geo.get(c.id)!;
           const isFocus = focus === c.id;
           const dim = zoomed && !isFocus;
-          const g = c.galaxy;
+          const lx = g.cx, ly = g.cy - g.rad - 20;
+          const half = labelHalf(c.label);
           return (
-            <g key={c.id} opacity={dim ? 0.3 : 1} style={{ transition: "opacity .3s", cursor: zoomed ? "default" : "zoom-in" }} onClick={(e) => { if (!zoomed) { e.stopPropagation(); focusCluster(c.id); } }}>
-              <ellipse cx={c.cx} cy={c.cy} rx={R * 2.1} ry={R * 1.55} fill={`url(#neb-${c.id})`} />
+            <g key={c.id} opacity={dim ? 0.25 : 1} style={{ transition: "opacity .3s" }}>
+              <ellipse cx={g.cx} cy={g.cy} rx={g.rad * 1.6} ry={g.rad * 1.25} fill={`url(#neb-${c.id})`} style={{ pointerEvents: "none" }} />
               {!isFocus && (
-                <g>
-                  <circle cx={c.cx} cy={c.cy} r={R + 26} fill={`url(#glow-${c.hue})`} />
-                  <circle cx={c.cx} cy={c.cy} r={R} fill={`hsl(${c.hue} 60% 50%)`} />
-                  {g?.avatarUrl
-                    ? <image href={g.avatarUrl} x={c.cx - R} y={c.cy - R} width={R * 2} height={R * 2} clipPath={`url(#clip-g-${c.id})`} preserveAspectRatio="xMidYMid slice" style={{ pointerEvents: "none" }} />
-                    : <text x={c.cx} y={c.cy} textAnchor="middle" dominantBaseline="central" fontSize={R * 0.7} fontWeight="800" fill="#fff" style={{ pointerEvents: "none" }}>{initialsOf(c.label)}</text>}
-                  <circle cx={c.cx} cy={c.cy} r={R} fill="none" stroke="var(--elev)" strokeWidth={4} />
-                  {/* число участников */}
-                  <g transform={`translate(${c.cx + R * 0.72}, ${c.cy - R * 0.72})`}>
-                    <circle r={17} fill="var(--saffron)" stroke="var(--elev)" strokeWidth={3} />
-                    <text textAnchor="middle" dominantBaseline="central" fontSize="16" fontWeight="800" fill="#1a1a1a">{c.members.length}</text>
-                  </g>
-                  <text x={c.cx} y={c.cy + R + 32} textAnchor="middle" fontSize="24" fontWeight="700" fill="var(--ink-2)" style={{ pointerEvents: "none" }}>{c.label}</text>
+                <g style={{ cursor: "zoom-in" }} onClick={(e) => { e.stopPropagation(); focusCluster(c.id); }}>
+                  <rect x={lx - half - 30} y={ly - 22} width={half * 2 + 60} height={44} rx={22} fill="var(--elev)" fillOpacity={0.92} stroke={`hsl(${c.hue} 60% 55%)`} strokeWidth={1.5} />
+                  {c.galaxy?.avatarUrl
+                    ? <image href={c.galaxy.avatarUrl} x={lx - half - 22} y={ly - 16} width={32} height={32} clipPath={`url(#clip-g-${c.id})`} preserveAspectRatio="xMidYMid slice" style={{ pointerEvents: "none" }} />
+                    : <circle cx={lx - half - 6} cy={ly} r={9} fill={`hsl(${c.hue} 65% 55%)`} />}
+                  <text x={lx + 12} y={ly} textAnchor="middle" dominantBaseline="central" fontSize="22" fontWeight="700" fill="var(--ink)" style={{ pointerEvents: "none" }}>
+                    {c.label} <tspan fill="var(--muted)" fontWeight="500" fontSize="18">· {c.members.length}</tspan>
+                  </text>
                 </g>
               )}
             </g>
           );
         })}
 
-        {/* связи людей внутри приближённой галактики */}
-        {zoomed && graph.links.map((l) => {
+        {/* связи людей внутри галактик */}
+        {graph.links.map((l) => {
           const a = byId.get(l.source), b = byId.get(l.target);
-          if (!a || !b || a.cluster !== focus || b.cluster !== focus) return null;
+          if (!a || !b || a.cluster !== b.cluster) return null;
           const mutual = linkSet.has(`${l.target}>${l.source}`);
           const active = hover === l.source || hover === l.target;
+          const dim = zoomed && a.cluster !== focus;
           return <line key={`${l.source}-${l.target}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-            stroke={active ? "var(--saffron)" : mutual ? "var(--accent)" : "var(--line-strong)"} strokeWidth={active ? 2 : mutual ? 1.4 : 0.9} strokeOpacity={hover && !active ? 0.3 : 0.9} />;
+            stroke={active ? "var(--saffron)" : mutual ? "var(--accent)" : "var(--line-strong)"} strokeWidth={active ? 2 : mutual ? 1.4 : 0.9} strokeOpacity={dim ? 0.15 : hover && !active ? 0.3 : 0.9} />;
         })}
 
-        {/* звёзды с аватарками — только в приближённой галактике */}
-        {zoomed && nodes.filter((n) => n.cluster === focus).map((n) => {
+        {/* звёзды с аватарками — скопления людей */}
+        {nodes.map((n) => {
           const r = nodeRadius(n, maxPosts);
           const h = HUES[n.hue % HUES.length];
-          const dim = hover && hover !== n.id && !linkSet.has(`${hover}>${n.id}`) && !linkSet.has(`${n.id}>${hover}`);
+          const inFocus = !zoomed || n.cluster === focus;
+          const dim = !inFocus || (hover && hover !== n.id && !linkSet.has(`${hover}>${n.id}`) && !linkSet.has(`${n.id}>${hover}`));
           const isDrag = dragging === n.id;
           const initials = n.name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
           return (
-            <g key={n.id} opacity={dim ? 0.3 : 1} style={{ transition: "opacity .2s", cursor: isDrag ? "grabbing" : "pointer" }}
+            <g key={n.id} opacity={dim ? (inFocus ? 0.3 : 0.2) : 1} style={{ transition: "opacity .2s", cursor: isDrag ? "grabbing" : inFocus && zoomed ? "pointer" : "zoom-in" }}
               onPointerEnter={() => !dragging && setHover(n.id)} onPointerLeave={() => !dragging && setHover(null)} onPointerDown={onDown(n.id)}>
               <circle cx={n.x} cy={n.y} r={r + 12 + n.followers * 2} fill={`url(#glow-${h})`} opacity={isDrag ? 0.9 : 0.5} />
               <circle cx={n.x} cy={n.y} r={Math.max(r + 10, 22)} fill="transparent" />
@@ -338,7 +350,7 @@ function Sky({ graph, meId, meAdmin }: { graph: GraphDto; meId: string | null; m
                 ? <image href={n.avatarUrl} x={n.x - r} y={n.y - r} width={r * 2} height={r * 2} clipPath={`url(#clip-${n.id})`} preserveAspectRatio="xMidYMid slice" style={{ pointerEvents: "none" }} />
                 : <text x={n.x} y={n.y} textAnchor="middle" dominantBaseline="central" fontSize={r * 0.8} fontWeight="700" fill="#fff" style={{ pointerEvents: "none" }}>{initials}</text>}
               <circle cx={n.x} cy={n.y} r={r} fill="none" stroke={n.id === meId ? "var(--saffron)" : "var(--elev)"} strokeWidth={n.id === meId ? 3 : 2} />
-              <text x={n.x} y={n.y + r + 13} textAnchor="middle" fontSize={11} fontWeight="600" fill="var(--ink-2)" style={{ pointerEvents: "none" }}>@{n.handle}</text>
+              {zoomed && inFocus && <text x={n.x} y={n.y + r + 13} textAnchor="middle" fontSize={11} fontWeight="600" fill="var(--ink-2)" style={{ pointerEvents: "none" }}>@{n.handle}</text>}
             </g>
           );
         })}
@@ -354,7 +366,7 @@ function Sky({ graph, meId, meAdmin }: { graph: GraphDto; meId: string | null; m
         ) : (
           <>
             <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 border-t-2 border-dashed border-accent" /> {t("explore.legendGalaxyLink")}</span>
-            <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-saffron" /> {t("explore.legendMembers")}</span>
+            <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full border-2 border-saffron" /> {t("explore.legendYou")}</span>
           </>
         )}
       </div>
