@@ -112,6 +112,7 @@ function Composer({ onSend, pending, isBot, onQuick }: { onSend: (body: { text?:
   const { t } = useT();
   const [text, setText] = useState("");
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const [recording, setRecording] = useState(false);
   const sendGif = async (m: { id: string }) => {
     try { await onSend({ mediaId: m.id }); } catch (e) { toast(e instanceof Error ? e.message : t("messages.sendFailed"), "error"); }
   };
@@ -152,6 +153,8 @@ function Composer({ onSend, pending, isBot, onQuick }: { onSend: (body: { text?:
         </div>
       )}
       <div className="flex items-end gap-1.5">
+        {/* во время записи полоса занимает всю строку — поле ввода и кнопки скрыты */}
+        <div className={cn("flex min-w-0 flex-1 items-end gap-1.5", recording && "hidden")}>
         <label className="btn btn-ghost btn-icon shrink-0 cursor-pointer text-accent" title={t("emoji.attach")}>
           <Paperclip size={20} />
           <input type="file" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.md,.json" className="hidden" onChange={(e) => { if (e.target.files?.length) upload.add(e.target.files); e.target.value = ""; }} />
@@ -162,9 +165,9 @@ function Composer({ onSend, pending, isBot, onQuick }: { onSend: (body: { text?:
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
           onPaste={(e) => { const f = Array.from(e.clipboardData.files ?? []); if (f.length) { e.preventDefault(); upload.add(f); } }}
           className="input max-h-32 min-h-10 flex-1 resize-none py-2.5" />
-        {!text.trim() && !upload.items.length
-          ? <VoiceRecorder onRecorded={sendVoice} disabled={pending} />
-          : <button onClick={submit} disabled={(!text.trim() && !upload.mediaIds.length) || pending || upload.uploading} className="btn btn-primary btn-icon shrink-0" aria-label={t("common.send")}><Send size={18} /></button>}
+        {(text.trim() || upload.items.length > 0) && <button onClick={submit} disabled={(!text.trim() && !upload.mediaIds.length) || pending || upload.uploading} className="btn btn-primary btn-icon shrink-0" aria-label={t("common.send")}><Send size={18} /></button>}
+        </div>
+        {!text.trim() && !upload.items.length && <VoiceRecorder onRecorded={sendVoice} onRecordingChange={setRecording} disabled={pending} />}
       </div>
     </div>
   );

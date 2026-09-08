@@ -30,7 +30,7 @@ const nowMs = () => performance.now();
 export const fmtClock = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 
 /** Кнопка микрофона: нажатие начинает запись, повторное — останавливает и отдаёт blob наверх. */
-export function VoiceRecorder({ onRecorded, disabled, maxMs = 5 * 60_000 }: { onRecorded: (blob: Blob, durationMs: number) => Promise<void> | void; disabled?: boolean; maxMs?: number }) {
+export function VoiceRecorder({ onRecorded, onRecordingChange, disabled, maxMs = 5 * 60_000 }: { onRecorded: (blob: Blob, durationMs: number) => Promise<void> | void; onRecordingChange?: (recording: boolean) => void; disabled?: boolean; maxMs?: number }) {
   const { t } = useT();
   const [state, setState] = useState<"idle" | "recording" | "sending">("idle");
   const [elapsed, setElapsed] = useState(0);
@@ -55,6 +55,7 @@ export function VoiceRecorder({ onRecorded, disabled, maxMs = 5 * 60_000 }: { on
       clearInterval(r.timer); cancelAnimationFrame(r.raf);
       stream.getTracks().forEach((x) => x.stop()); r.ctx?.close().catch(() => {});
       rec.current = null;
+      onRecordingChange?.(false);
       const duration = nowMs() - r.start;
       if (r.cancelled || duration < 400 || !r.chunks.length) { setState("idle"); setElapsed(0); return; }
       setState("sending");
@@ -76,6 +77,7 @@ export function VoiceRecorder({ onRecorded, disabled, maxMs = 5 * 60_000 }: { on
     r.timer = window.setInterval(() => { const e = nowMs() - r.start; setElapsed(e); if (e >= maxMs) stop(); }, 200);
     mr.start(250);
     setState("recording");
+    onRecordingChange?.(true);
   };
   const stop = () => { const r = rec.current; if (r && r.mr.state !== "inactive") r.mr.stop(); };
   const cancel = () => { const r = rec.current; if (r) { r.cancelled = true; stop(); } };
