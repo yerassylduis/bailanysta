@@ -153,8 +153,9 @@ export function Profile({ handle }: { handle: string }) {
               ["likes", p.stats.likesReceived, t("profile.statLikes", { count: p.stats.likesReceived })],
             ] as const).map(([id, n, l]) => (
               id === "followers" || id === "following"
-                ? <button key={id} type="button" onClick={() => setList(id)} className="rounded-xl text-center transition hover:bg-accent-soft sm:text-left sm:px-2 sm:-mx-2" title={t(id === "followers" ? "profile.followersTitle" : "profile.followingTitle")}>
-                    <dt className="font-display text-lg font-bold tabular-nums">{n}</dt><dd className="text-[11px] text-muted underline decoration-dotted underline-offset-2">{l}</dd>
+                ? <button key={id} type="button" onClick={() => setList(id)} aria-label={t(id === "followers" ? "profile.followersTitle" : "profile.followingTitle")}
+                    className="group -m-1.5 flex w-fit flex-col items-center justify-self-center rounded-xl px-2.5 py-1.5 text-center transition-colors hover:bg-accent-soft active:scale-[0.98] sm:items-start sm:justify-self-start sm:text-left">
+                    <dt className="font-display text-lg font-bold tabular-nums transition-colors group-hover:text-accent">{n}</dt><dd className="text-[11px] text-muted transition-colors group-hover:text-accent">{l}</dd>
                   </button>
                 : <div key={id}><dt className="font-display text-lg font-bold tabular-nums">{n}</dt><dd className="text-[11px] text-muted">{l}</dd></div>
             ))}

@@ -107,6 +107,14 @@ function waveBars(seed: string, n = 36): number[] {
   return out;
 }
 
+function Wave({ bars, cls }: { bars: number[]; cls: string }) {
+  return (
+    <div className="flex h-8 w-full items-center gap-[2px]">
+      {bars.map((b, i) => <span key={i} className={cn("flex-1 rounded-full", cls)} style={{ height: `${Math.round(b * 100)}%`, minWidth: 2 }} />)}
+    </div>
+  );
+}
+
 /**
  * Плеер голосового — самостоятельная карточка в контрастных цветах (не наследует цвет пузыря):
  * шафрановая кнопка, волна с заливкой прогресса, длительность и скорость 1×/1,5×/2×.
@@ -114,37 +122,56 @@ function waveBars(seed: string, n = 36): number[] {
 export function AudioMessage({ media }: { media: MediaDto; mine?: boolean }) {
   const { t } = useT();
   const ref = useRef<HTMLAudioElement>(null);
+  const fillRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef(0);
   const [playing, setPlaying] = useState(false);
-  const [pos, setPos] = useState(0);
+  const [shownSec, setShownSec] = useState<number | null>(null); // текущая секунда при воспроизведении
   const [dur, setDur] = useState((media.durationMs ?? 0) / 1000);
   const speed = useSyncExternalStore(subscribeSpeed, readSpeed, () => 1);
   const bars = waveBars(media.id);
 
   useEffect(() => { if (ref.current) ref.current.playbackRate = speed; }, [speed]);
 
+  /** Прогресс двигается каждый кадр (rAF), а не по timeupdate 4 раза в секунду: заливка идёт плавно. */
+  const paint = () => {
+    const a = ref.current, f = fillRef.current;
+    if (!a || !f) return;
+    const d = Number.isFinite(a.duration) && a.duration > 0 ? a.duration : dur;
+    const pct = d ? Math.min(100, (a.currentTime / d) * 100) : 0;
+    f.style.clipPath = `inset(0 ${100 - pct}% 0 0)`;
+    setShownSec((prev) => { const sec = Math.floor(a.currentTime); return prev === sec ? prev : sec; });
+  };
+  useEffect(() => {
+    if (!playing) return;
+    const loop = () => { paint(); rafRef.current = requestAnimationFrame(loop); };
+    rafRef.current = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing]);
+
   const toggle = () => { const a = ref.current; if (!a) return; if (a.paused) { a.playbackRate = speed; a.play().catch(() => {}); } else a.pause(); };
-  const seek = (e: React.MouseEvent<HTMLDivElement>) => { const a = ref.current; if (!a || !dur) return; const r = e.currentTarget.getBoundingClientRect(); a.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * dur; };
+  const seek = (e: React.MouseEvent<HTMLDivElement>) => { const a = ref.current; if (!a || !dur) return; const r = e.currentTarget.getBoundingClientRect(); a.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * dur; paint(); };
   const cycle = () => setSpeed(SPEEDS[(SPEEDS.indexOf(speed as typeof SPEEDS[number]) + 1) % SPEEDS.length]);
-  const pct = dur ? Math.min(100, (pos / dur) * 100) : 0;
+  const label = shownSec !== null ? shownSec : dur;
 
   return (
     <div className="flex w-[280px] max-w-full items-center gap-3 rounded-2xl border border-line bg-elev px-3 py-2.5 text-ink shadow-sm" data-testid="voice-message">
       <audio ref={ref} src={media.url} preload="metadata"
         onLoadedMetadata={(e) => { const d = e.currentTarget.duration; if (Number.isFinite(d) && d > 0) setDur(d); }}
         onDurationChange={(e) => { const d = e.currentTarget.duration; if (Number.isFinite(d) && d > 0) setDur(d); }}
-        onTimeUpdate={(e) => setPos(e.currentTarget.currentTime)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => { setPlaying(false); setPos(0); }} />
+        onPlay={() => setPlaying(true)} onPause={() => { setPlaying(false); paint(); }}
+        onEnded={() => { setPlaying(false); setShownSec(null); if (fillRef.current) fillRef.current.style.clipPath = "inset(0 100% 0 0)"; }} />
       <button type="button" onClick={toggle} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-saffron text-[#1a1a1a] shadow-card transition hover:brightness-105 active:scale-95" aria-label={playing ? t("emoji.pause") : t("emoji.play")}>
         {playing ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
       </button>
       <div className="min-w-0 flex-1">
-        <div className="relative flex h-8 w-full cursor-pointer items-center gap-[2px]" onClick={seek} role="slider" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)} aria-label={t("emoji.voice")}>
-          {bars.map((b, i) => {
-            const on = (i / bars.length) * 100 < pct;
-            return <span key={i} className={cn("flex-1 rounded-full transition-colors", on ? "bg-accent" : "bg-line-strong")} style={{ height: `${Math.round(b * 100)}%`, minWidth: 2 }} />;
-          })}
+        <div className="relative w-full cursor-pointer select-none" onClick={seek} role="slider" aria-valuemin={0} aria-valuemax={100} aria-valuenow={dur ? Math.round(((shownSec ?? 0) / dur) * 100) : 0} aria-label={t("emoji.voice")}>
+          <Wave bars={bars} cls="bg-line-strong" />
+          {/* заливка прогресса: та же волна в цвете акцента поверх, обрезанная clip-path — двигается непрерывно */}
+          <div ref={fillRef} className="pointer-events-none absolute inset-0" style={{ clipPath: "inset(0 100% 0 0)" }}><Wave bars={bars} cls="bg-accent" /></div>
         </div>
         <div className="mt-1 flex items-center justify-between text-[11px] tabular-nums text-muted">
-          <span className="font-semibold text-ink-2">{fmtClock((playing || pos > 0 ? pos : dur) * 1000)}</span>
+          <span className="font-semibold text-ink-2">{fmtClock(label * 1000)}</span>
           <button type="button" onClick={cycle} className="rounded-md bg-accent-soft px-2 py-0.5 font-bold text-accent" title={t("emoji.speed")}>{speed === 1 ? "1×" : speed === 1.5 ? "1,5×" : "2×"}</button>
         </div>
       </div>
