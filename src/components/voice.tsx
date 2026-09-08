@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Mic, Square, X, Play, Pause } from "lucide-react";
+import fixWebmDuration from "fix-webm-duration";
 import { cn } from "@/lib/format";
 import type { MediaDto } from "@/lib/types";
 import { useT } from "./locale-provider";
@@ -57,7 +58,12 @@ export function VoiceRecorder({ onRecorded, disabled, maxMs = 5 * 60_000 }: { on
       const duration = nowMs() - r.start;
       if (r.cancelled || duration < 400 || !r.chunks.length) { setState("idle"); setElapsed(0); return; }
       setState("sending");
-      try { await onRecorded(new Blob(r.chunks, { type: mime.split(";")[0] }), Math.round(duration)); } finally { setState("idle"); setElapsed(0); }
+      try {
+        let blob = new Blob(r.chunks, { type: mime.split(";")[0] });
+        // MediaRecorder не пишет длительность в WebM — без неё браузер считает файл бесконечным, ломаются перемотка и конец дорожки
+        if (blob.type.includes("webm")) { try { blob = await fixWebmDuration(blob, Math.round(duration), { logger: false }); } catch {} }
+        await onRecorded(blob, Math.round(duration));
+      } finally { setState("idle"); setElapsed(0); }
     };
     // индикатор громкости
     try {
@@ -123,23 +129,28 @@ export function AudioMessage({ media }: { media: MediaDto; mine?: boolean }) {
   const { t } = useT();
   const ref = useRef<HTMLAudioElement>(null);
   const fillRef = useRef<HTMLDivElement>(null);
+  const timeRef = useRef<HTMLSpanElement>(null);
+  const sliderRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef(0);
   const [playing, setPlaying] = useState(false);
-  const [shownSec, setShownSec] = useState<number | null>(null); // текущая секунда при воспроизведении
-  const [dur, setDur] = useState((media.durationMs ?? 0) / 1000);
   const speed = useSyncExternalStore(subscribeSpeed, readSpeed, () => 1);
   const bars = waveBars(media.id);
+  const fallbackDur = (media.durationMs ?? 0) / 1000;
 
   useEffect(() => { if (ref.current) ref.current.playbackRate = speed; }, [speed]);
 
-  /** Прогресс двигается каждый кадр (rAF), а не по timeupdate 4 раза в секунду: заливка идёт плавно. */
-  const paint = () => {
-    const a = ref.current, f = fillRef.current;
-    if (!a || !f) return;
-    const d = Number.isFinite(a.duration) && a.duration > 0 ? a.duration : dur;
-    const pct = d ? Math.min(100, (a.currentTime / d) * 100) : 0;
+  /** Длительность: из файла, если она конечна, иначе — с сервера (для WebM без метаданных). */
+  const durationOf = (a: HTMLAudioElement) => (Number.isFinite(a.duration) && a.duration > 0 ? a.duration : fallbackDur);
+  /** Прогресс и время рисуются напрямую в DOM каждый кадр — без перерисовок React и рывков. */
+  const paint = (reset = false) => {
+    const a = ref.current, f = fillRef.current, tm = timeRef.current;
+    if (!a || !f || !tm) return;
+    const d = durationOf(a);
+    const cur = reset ? 0 : Math.min(a.currentTime, d || a.currentTime);
+    const pct = d ? Math.max(0, Math.min(100, (cur / d) * 100)) : 0;
     f.style.clipPath = `inset(0 ${100 - pct}% 0 0)`;
-    setShownSec((prev) => { const sec = Math.floor(a.currentTime); return prev === sec ? prev : sec; });
+    sliderRef.current?.setAttribute("aria-valuenow", String(Math.round(pct)));
+    tm.textContent = fmtClock((reset || (a.paused && cur === 0) ? d : cur) * 1000);
   };
   useEffect(() => {
     if (!playing) return;
@@ -150,28 +161,34 @@ export function AudioMessage({ media }: { media: MediaDto; mine?: boolean }) {
   }, [playing]);
 
   const toggle = () => { const a = ref.current; if (!a) return; if (a.paused) { a.playbackRate = speed; a.play().catch(() => {}); } else a.pause(); };
-  const seek = (e: React.MouseEvent<HTMLDivElement>) => { const a = ref.current; if (!a || !dur) return; const r = e.currentTarget.getBoundingClientRect(); a.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * dur; paint(); };
+  const seek = (e: React.MouseEvent<HTMLDivElement>) => {
+    const a = ref.current; if (!a) return;
+    const d = durationOf(a); if (!d) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const target = Math.max(0, Math.min(0.999, (e.clientX - r.left) / r.width)) * d;
+    // у WebM без индекса перемотка возможна только внутри буфера — иначе браузер прыгнет в начало
+    const ok = a.seekable.length === 0 || (target >= a.seekable.start(0) && target <= a.seekable.end(a.seekable.length - 1));
+    if (ok) { a.currentTime = target; paint(); }
+  };
   const cycle = () => setSpeed(SPEEDS[(SPEEDS.indexOf(speed as typeof SPEEDS[number]) + 1) % SPEEDS.length]);
-  const label = shownSec !== null ? shownSec : dur;
 
   return (
     <div className="flex w-[280px] max-w-full items-center gap-3 rounded-2xl border border-line bg-elev px-3 py-2.5 text-ink shadow-sm" data-testid="voice-message">
-      <audio ref={ref} src={media.url} preload="metadata"
-        onLoadedMetadata={(e) => { const d = e.currentTarget.duration; if (Number.isFinite(d) && d > 0) setDur(d); }}
-        onDurationChange={(e) => { const d = e.currentTarget.duration; if (Number.isFinite(d) && d > 0) setDur(d); }}
+      <audio ref={ref} src={media.url} preload="auto"
+        onLoadedMetadata={() => paint(true)} onDurationChange={() => { if (ref.current?.paused) paint(ref.current.currentTime === 0); }}
         onPlay={() => setPlaying(true)} onPause={() => { setPlaying(false); paint(); }}
-        onEnded={() => { setPlaying(false); setShownSec(null); if (fillRef.current) fillRef.current.style.clipPath = "inset(0 100% 0 0)"; }} />
+        onEnded={() => { setPlaying(false); paint(true); }} />
       <button type="button" onClick={toggle} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-saffron text-[#1a1a1a] shadow-card transition hover:brightness-105 active:scale-95" aria-label={playing ? t("emoji.pause") : t("emoji.play")}>
         {playing ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
       </button>
       <div className="min-w-0 flex-1">
-        <div className="relative w-full cursor-pointer select-none" onClick={seek} role="slider" aria-valuemin={0} aria-valuemax={100} aria-valuenow={dur ? Math.round(((shownSec ?? 0) / dur) * 100) : 0} aria-label={t("emoji.voice")}>
+        <div ref={sliderRef} className="relative w-full cursor-pointer select-none" onClick={seek} role="slider" aria-valuemin={0} aria-valuemax={100} aria-valuenow={0} aria-label={t("emoji.voice")}>
           <Wave bars={bars} cls="bg-line-strong" />
           {/* заливка прогресса: та же волна в цвете акцента поверх, обрезанная clip-path — двигается непрерывно */}
-          <div ref={fillRef} className="pointer-events-none absolute inset-0" style={{ clipPath: "inset(0 100% 0 0)" }}><Wave bars={bars} cls="bg-accent" /></div>
+          <div ref={fillRef} className="pointer-events-none absolute inset-0 will-change-[clip-path]" style={{ clipPath: "inset(0 100% 0 0)" }}><Wave bars={bars} cls="bg-accent" /></div>
         </div>
         <div className="mt-1 flex items-center justify-between text-[11px] tabular-nums text-muted">
-          <span className="font-semibold text-ink-2">{fmtClock(label * 1000)}</span>
+          <span ref={timeRef} className="font-semibold text-ink-2">{fmtClock(fallbackDur * 1000)}</span>
           <button type="button" onClick={cycle} className="rounded-md bg-accent-soft px-2 py-0.5 font-bold text-accent" title={t("emoji.speed")}>{speed === 1 ? "1×" : speed === 1.5 ? "1,5×" : "2×"}</button>
         </div>
       </div>
