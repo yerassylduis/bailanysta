@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
+import { cosmosEnabled, subscribePrefs } from "@/lib/prefs";
 
 /**
  * Космический фон: canvas со звёздами трёх слоёв параллакса, мерцанием, медленным дрейфом,
@@ -133,8 +134,10 @@ function drawPlanet(ctx: CanvasRenderingContext2D, p: Planet, cx: number, cy: nu
 
 export function Cosmos() {
   const ref = useRef<HTMLCanvasElement>(null);
+  const enabled = useSyncExternalStore(subscribePrefs, cosmosEnabled, () => true);
 
   useEffect(() => {
+    if (!enabled) return;
     const canvas = ref.current!;
     const ctx = canvas.getContext("2d", { alpha: true })!;
     const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -223,10 +226,10 @@ export function Cosmos() {
     window.addEventListener("resize", resize);
     document.addEventListener("visibilitychange", onVis);
     return () => { alive = false; stop(); mo.disconnect(); window.removeEventListener("resize", resize); document.removeEventListener("visibilitychange", onVis); };
-  }, []);
+  }, [enabled]);
 
   return (
-    <div className="cosmos" aria-hidden>
+    <div className="cosmos" aria-hidden hidden={!enabled}>
       <div className="nebula nebula-a" />
       <div className="nebula nebula-b" />
       <div className="nebula nebula-c" />

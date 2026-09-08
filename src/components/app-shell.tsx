@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Compass, Home, LogIn, Moon, Search, Sun, UserRound, Sparkles, Command, MessageCircle, Bookmark, Video, Volume2, VolumeX, ShieldCheck, Ban } from "lucide-react";
+import { Bell, Compass, Home, LogIn, Moon, Search, Sun, UserRound, Sparkles, Command, MessageCircle, Bookmark, Video, Volume2, VolumeX, ShieldCheck, Ban, Settings } from "lucide-react";
 import { useSyncExternalStore } from "react";
 import { setSoundEnabled, soundEnabled, subscribeSound } from "@/lib/sound";
 import { useLogout, useMe } from "@/hooks/use-data";
@@ -13,7 +13,7 @@ import { RightRail } from "./right-rail";
 import { CommandPalette, useCommandPalette } from "./command-palette";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useToast } from "./toast";
-import { LangToggle, useT } from "./locale-provider";
+import { useT } from "./locale-provider";
 import { fmtDateTime } from "@/lib/format";
 
 /**
@@ -45,8 +45,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       ? { href: `/u/${me.handle}`, label: t("nav.profile"), icon: UserRound, badge: 0, match: (p: string) => p === `/u/${me.handle}` }
       : { href: "/login", label: t("nav.login"), icon: LogIn, badge: 0, match: (p: string) => p.startsWith("/login") },
     ...(me?.isAdmin ? [{ href: "/admin", label: t("nav.admin"), icon: ShieldCheck, badge: 0, match: (p: string) => p.startsWith("/admin") }] : []),
+    { href: "/settings", label: t("nav.settings"), icon: Settings, badge: 0, match: (p: string) => p.startsWith("/settings") },
   ];
-  const mobileItems = items.filter((i) => i.href !== "/bookmarks" && i.href !== "/calls" && i.href !== "/admin");
+  const mobileItems = items.filter((i) => i.href !== "/bookmarks" && i.href !== "/calls" && i.href !== "/admin" && i.href !== "/settings");
 
   // Заблокированный аккаунт: вместо приложения — объяснение и кнопка выхода
   if (me?.banned) {
@@ -86,11 +87,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {me && <Link href="/?compose=1" className="btn btn-primary mt-5 py-3 text-[15px] shadow-card"><Sparkles size={18} /> {t("nav.compose")}</Link>}
 
           <div className="mt-auto space-y-3 pt-6">
-            <div className="flex items-center gap-2">
-              <div className="min-w-0 flex-1"><ThemeToggle /></div>
-              <SoundToggle />
-            </div>
-            <LangToggle />
             {me ? (
               <Link href={`/u/${me.handle}`} className="card flex items-center gap-3 p-2.5 transition hover:border-line-strong">
                 <Avatar user={me} size={36} />
@@ -112,9 +108,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link href="/" className="flex items-center gap-2"><Logo size={28} /><Wordmark compact /></Link>
             <div className="flex items-center gap-0.5">
               <button onClick={palette.open} className="btn btn-ghost btn-icon" aria-label={t("nav.search")}><Search size={21} /></button>
-              <SoundToggle />
-              <LangToggle compact />
               <ThemeToggle compact />
+              <Link href="/settings" className={cn("btn btn-ghost btn-icon", pathname.startsWith("/settings") && "text-accent")} aria-label={t("nav.settings")}><Settings size={21} /></Link>
             </div>
           </header>
           {children}

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Compass, Hash, Home, Moon, Search, UserRound, Bell, PenLine, MessageCircle, Bookmark, Video, ShieldCheck } from "lucide-react";
+import { Compass, Hash, Home, Moon, Search, UserRound, Bell, PenLine, MessageCircle, Bookmark, Video, ShieldCheck, Settings } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useMe } from "@/hooks/use-data";
 import { useTheme } from "./providers";
@@ -64,6 +64,7 @@ function PaletteDialog({ state }: { state: ReturnType<typeof useCommandPalette> 
         { id: "me", label: t("palette.me"), hint: `@${me.handle}`, icon: <UserRound size={16} />, run: () => go(`/u/${me.handle}`) },
         ...(me.isAdmin ? [{ id: "admin", label: t("palette.admin"), icon: <ShieldCheck size={16} />, run: () => go("/admin") }] : []),
       ] : [{ id: "login", label: t("nav.login"), icon: <UserRound size={16} />, run: () => go("/login") }]),
+      { id: "settings", label: t("nav.settings"), icon: <Settings size={16} />, run: () => go("/settings") },
       { id: "theme", label: theme === "dark" ? t("palette.themeLight", { name: t("nav.theme.light") }) : t("palette.themeDark", { name: t("nav.theme.dark") }), icon: <Moon size={16} />, run: () => { toggle(); state.close(); } },
     ];
     const qq = q.trim();

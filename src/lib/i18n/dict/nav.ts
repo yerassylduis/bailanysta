@@ -4,7 +4,7 @@ import type { Namespace } from "../index";
 const nav: Namespace = {
   ru: {
     feed: "Лента", explore: "Созвездие", messages: "Сообщения", calls: "Байланыс", notifications: "Уведомления", bookmarks: "Закладки", profile: "Профиль",
-    login: "Войти", admin: "Админ", search: "Поиск", compose: "Написать", loginByEmail: "Войти по почте",
+    login: "Войти", admin: "Админ", settings: "Настройки", search: "Поиск", compose: "Написать", loginByEmail: "Войти по почте",
     theme: "Тема", "theme.light": "День", "theme.dark": "Ночь", themeToggle: "Переключить тему", lang: "Язык",
     soundOn: "Звук уведомлений включён", soundOff: "Звук уведомлений выключен", soundEnable: "Включить звук уведомлений", soundDisable: "Выключить звук уведомлений",
     bannedTitle: "Аккаунт заблокирован", bannedUntil: "До {date}", bannedForever: "Без срока", bannedReason: "причина: {reason}",
@@ -14,7 +14,7 @@ const nav: Namespace = {
   },
   kk: {
     feed: "Лента", explore: "Шоқжұлдыз", messages: "Хабарламалар", calls: "Байланыс", notifications: "Хабарландырулар", bookmarks: "Бетбелгілер", profile: "Профиль",
-    login: "Кіру", admin: "Әкімші", search: "Іздеу", compose: "Жазу", loginByEmail: "Пошта арқылы кіру",
+    login: "Кіру", admin: "Әкімші", settings: "Баптаулар", search: "Іздеу", compose: "Жазу", loginByEmail: "Пошта арқылы кіру",
     theme: "Тақырып", "theme.light": "Күн", "theme.dark": "Түн", themeToggle: "Тақырыпты ауыстыру", lang: "Тіл",
     soundOn: "Хабарландыру дыбысы қосулы", soundOff: "Хабарландыру дыбысы өшірулі", soundEnable: "Хабарландыру дыбысын қосу", soundDisable: "Хабарландыру дыбысын өшіру",
     bannedTitle: "Аккаунт бұғатталған", bannedUntil: "{date} дейін", bannedForever: "Мерзімсіз", bannedReason: "себебі: {reason}",
@@ -24,7 +24,7 @@ const nav: Namespace = {
   },
   en: {
     feed: "Feed", explore: "Constellation", messages: "Messages", calls: "Bailanys", notifications: "Notifications", bookmarks: "Bookmarks", profile: "Profile",
-    login: "Sign in", admin: "Admin", search: "Search", compose: "Write", loginByEmail: "Sign in with email",
+    login: "Sign in", admin: "Admin", settings: "Settings", search: "Search", compose: "Write", loginByEmail: "Sign in with email",
     theme: "Theme", "theme.light": "Day", "theme.dark": "Night", themeToggle: "Toggle theme", lang: "Language",
     soundOn: "Notification sound is on", soundOff: "Notification sound is off", soundEnable: "Turn notification sound on", soundDisable: "Turn notification sound off",
     bannedTitle: "Account suspended", bannedUntil: "Until {date}", bannedForever: "Indefinitely", bannedReason: "reason: {reason}",
