@@ -82,15 +82,17 @@ export function VoiceRecorder({ onRecorded, disabled, maxMs = 5 * 60_000 }: { on
 
   if (state === "recording") {
     return (
-      <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl bg-rose-soft px-2.5 py-1.5" role="status" aria-live="polite">
+      <div className="flex h-10 min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-xl bg-rose-soft pl-3 pr-1.5" role="status" aria-live="polite">
         <span className="relative flex h-3 w-3 shrink-0"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose opacity-60" /><span className="relative inline-flex h-3 w-3 rounded-full bg-rose" /></span>
-        <span className="text-xs font-semibold text-rose">{t("emoji.recording")}</span>
-        <span className="font-mono text-xs tabular-nums text-ink-2">{fmtClock(elapsed)}</span>
-        <span className="mx-1 flex h-4 flex-1 items-end gap-0.5 overflow-hidden" aria-hidden>
+        <span className="hidden whitespace-nowrap text-xs font-semibold text-rose sm:inline">{t("emoji.recording")}</span>
+        <span className="shrink-0 font-mono text-xs tabular-nums text-ink-2">{fmtClock(elapsed)}</span>
+        <span className="mx-1 hidden h-4 min-w-0 flex-1 items-end gap-0.5 overflow-hidden min-[420px]:flex" aria-hidden>
           {Array.from({ length: 16 }).map((_, i) => <span key={i} className="w-1 rounded-sm bg-rose/70 transition-[height] duration-100" style={{ height: `${Math.max(15, Math.min(100, level * 100 * (0.5 + Math.sin(i * 1.3 + elapsed / 120) * 0.5 + 0.5)))}%` }} />)}
         </span>
-        <button type="button" onClick={cancel} className="btn btn-ghost btn-icon h-8 w-8 shrink-0" title={t("emoji.cancelRecording")} aria-label={t("emoji.cancelRecording")}><X size={16} /></button>
-        <button type="button" onClick={stop} className="btn btn-primary btn-icon h-8 w-8 shrink-0" title={t("emoji.stopAndSend")} aria-label={t("emoji.stopAndSend")}><Square size={14} /></button>
+        <span className="ml-auto flex shrink-0 items-center gap-1">
+          <button type="button" onClick={cancel} className="btn btn-ghost btn-icon h-8 w-8 shrink-0" title={t("emoji.cancelRecording")} aria-label={t("emoji.cancelRecording")}><X size={16} /></button>
+          <button type="button" onClick={stop} className="btn btn-primary btn-icon h-8 w-8 shrink-0" title={t("emoji.stopAndSend")} aria-label={t("emoji.stopAndSend")}><Square size={14} /></button>
+        </span>
       </div>
     );
   }
